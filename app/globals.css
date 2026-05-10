@@ -1,0 +1,89 @@
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --bg:      #0A0E1A;
+  --card:    #141824;
+  --header:  #0D1220;
+  --accent:  #00FF87;
+  --live:    #ff4444;
+  --sd:      #60a5fa;
+  --hd:      #00FF87;
+  --text:    #ffffff;
+  --muted:   rgba(255,255,255,0.4);
+  --border:  rgba(255,255,255,0.08);
+  --card2:   #1a2030;
+}
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  padding-bottom: 72px;
+}
+
+a { color: inherit; text-decoration: none; }
+button { cursor: pointer; font-family: inherit; }
+img { display: block; }
+
+/* ── Hide scrollbar everywhere ── */
+* { scrollbar-width: none; -ms-overflow-style: none; }
+*::-webkit-scrollbar { display: none; }
+
+/* ── Shimmer skeleton ── */
+@keyframes shimmer {
+  0%   { background-position: -600px 0; }
+  100% { background-position:  600px 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg,
+    #141824 0%, #1e2738 40%, #141824 80%);
+  background-size: 600px 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+/* ── Live pulse dot ── */
+@keyframes livePulse {
+  0%, 100% { opacity: 1;   box-shadow: 0 0 0 0   rgba(255,68,68,0.6); }
+  50%       { opacity: .7; box-shadow: 0 0 0 6px rgba(255,68,68,0); }
+}
+.live-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--live);
+  animation: livePulse 1.4s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+/* ── Spinner ── */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.spinner {
+  width: 40px; height: 40px;
+  border: 3px solid rgba(0,255,135,0.2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+
+/* ── Fade-in ── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-in { animation: fadeIn .25s ease-out both; }
+
+/* ── Ripple for live badge ── */
+@keyframes ripple {
+  0%   { transform: scale(1); opacity: .5; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
