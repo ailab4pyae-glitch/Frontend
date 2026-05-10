@@ -17,7 +17,7 @@ export default function Home() {
   return (
     <div style={{ minHeight: '100vh', background: '#0A0E1A' }}>
       <Header />
-      <TabStrip tabs={tabs || []} activeTab={activeTab} onTabChange={setActiveTab} />
+      <TabStrip tabs={Array.isArray(tabs) ? tabs : []} activeTab={activeTab} onTabChange={setActiveTab} />
       <main>
         <MatchList key={activeTab} tab={activeTab} />
       </main>

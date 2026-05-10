@@ -38,14 +38,34 @@ const SOURCE_LABEL = {
   'main-live':  '',
 }
 
-export default function MatchCard({ match }) {
+const getScheduleLabel = (scheduledAt) => {
+  if (!scheduledAt) return ''
+  const d   = new Date(scheduledAt)
+  const now = new Date()
+  const diffMin = Math.round((d - now) / 60000)
+  if (diffMin > 0 && diffMin < 60) return `${diffMin} min`
+  const hhmm  = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+  const today = new Date(); today.setHours(0,0,0,0)
+  const tom   = new Date(today); tom.setDate(today.getDate() + 1)
+  const day   = new Date(d);    day.setHours(0,0,0,0)
+  if (day.getTime() === today.getTime()) return hhmm
+  if (day.getTime() === tom.getTime())   return `Tom ${hhmm}`
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ' ' + hhmm
+}
+
+const isSoon = (scheduledAt) => {
+  if (!scheduledAt) return false
+  const diff = new Date(scheduledAt) - Date.now()
+  return diff > 0 && diff <= 60 * 60 * 1000
+}
+
+export default function MatchCard({ match, multiSource = false }) {
   const router = useRouter()
 
-  const isLive  = match.status === 'live'
-  const time    = match.scheduled_at
-    ? new Date(match.scheduled_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
-    : ''
-
+  const isLive      = match.status === 'live'
+  const isFinished  = match.status === 'finished'
+  const soon        = !isLive && !isFinished && isSoon(match.scheduled_at)
+  const schedLabel  = getScheduleLabel(match.scheduled_at)
   const sourceLabel = SOURCE_LABEL[match.source_tab] || ''
 
   return (
@@ -104,11 +124,25 @@ export default function MatchCard({ match }) {
         }}>
           {isLive ? (
             <>
-              <span style={{ fontSize: 22, fontWeight: 800, color: '#fff', letterSpacing: 2, lineHeight: 1 }}>
+              <span style={{
+                fontSize: 22, fontWeight: 800, letterSpacing: 2, lineHeight: 1,
+                color: multiSource ? '#FFD700' : '#fff',
+                textShadow: multiSource ? '0 0 12px rgba(255,215,0,0.5)' : 'none',
+              }}>
                 {match.score_home != null && match.score_away != null
                   ? `${match.score_home} - ${match.score_away}`
                   : 'VS'}
               </span>
+              {multiSource && (
+                <span style={{
+                  fontSize: 9, fontWeight: 700, letterSpacing: 0.5,
+                  color: '#FFD700', background: 'rgba(255,215,0,0.12)',
+                  border: '1px solid rgba(255,215,0,0.3)',
+                  borderRadius: 4, padding: '1px 5px',
+                }}>
+                  MULTI
+                </span>
+              )}
               {match.elapsed_minutes != null && (
                 <span style={{
                   fontSize: 11, fontWeight: 700, color: '#00FF87',
@@ -118,11 +152,32 @@ export default function MatchCard({ match }) {
                   {match.elapsed_minutes}&apos;
                 </span>
               )}
+              {match.scheduled_at && (
+                <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
+                  {new Date(match.scheduled_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                  {' '}
+                  {new Date(match.scheduled_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
             </>
           ) : (
-            <span style={{ fontSize: 15, fontWeight: 600, color: 'rgba(255,255,255,0.45)' }}>
-              {time}
-            </span>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+              <span style={{
+                fontSize: soon ? 13 : 15, fontWeight: 700,
+                color: soon ? '#f59e0b' : 'rgba(255,255,255,0.45)',
+              }}>
+                {schedLabel || 'VS'}
+              </span>
+              {soon && (
+                <span style={{
+                  fontSize: 10, fontWeight: 700, color: '#f59e0b',
+                  background: 'rgba(245,158,11,0.12)', borderRadius: 4,
+                  padding: '1px 6px', letterSpacing: 0.3,
+                }}>
+                  SOON
+                </span>
+              )}
+            </div>
           )}
         </div>
 
@@ -153,21 +208,25 @@ export default function MatchCard({ match }) {
               background: 'rgba(0,255,135,0.1)', color: '#00FF87', border: '1px solid rgba(0,255,135,0.2)',
             }}>HD</span>
           </>
+        ) : soon ? (
+          <span style={{ fontSize: 12, color: '#f59e0b', fontWeight: 600 }}>
+            ⏱ Starting soon
+          </span>
         ) : (
-          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>
-            Available at kickoff
+          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>
+            {schedLabel ? `Kicks off ${schedLabel}` : 'Upcoming'}
           </span>
         )}
         <div style={{ marginLeft: 'auto' }}>
           <span style={{
             display: 'inline-flex', alignItems: 'center', gap: 5,
             fontSize: 13, fontWeight: 700,
-            color: isLive ? '#00FF87' : 'rgba(255,255,255,0.4)',
+            color: isLive ? '#00FF87' : soon ? '#f59e0b' : 'rgba(255,255,255,0.4)',
             padding: '6px 14px', borderRadius: 20, border: 'none',
-            background: isLive ? 'rgba(0,255,135,0.12)' : 'rgba(255,255,255,0.05)',
+            background: isLive ? 'rgba(0,255,135,0.12)' : soon ? 'rgba(245,158,11,0.1)' : 'rgba(255,255,255,0.05)',
           }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-            {isLive ? 'Watch' : 'Soon'}
+            {isLive ? 'Watch' : soon ? 'Soon' : 'Upcoming'}
           </span>
         </div>
       </div>

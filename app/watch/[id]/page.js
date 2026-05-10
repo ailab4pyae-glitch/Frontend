@@ -32,10 +32,10 @@ export default function WatchPage() {
   const { data: match }   = useSWR(apiUrl.match(id),   fetcher)
   const { data: streams } = useSWR(apiUrl.streams(id), fetcher, { refreshInterval: 60000 })
 
-  // Build flat ordered list: HD first, then SD
+  // SD first (default), HD as fallback
   const allUrls = [
-    ...((streams?.HD || []).map((s) => s.url)),
     ...((streams?.SD || []).map((s) => s.url)),
+    ...((streams?.HD || []).map((s) => s.url)),
   ]
 
   const [serverIndex, setServerIndex] = useState(0)

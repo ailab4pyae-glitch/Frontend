@@ -1,15 +1,38 @@
+const getTimeLabel = (scheduledAt) => {
+  if (!scheduledAt) return ''
+  const d   = new Date(scheduledAt)
+  const now = new Date()
+  const diffMin = Math.round((d - now) / 60000)
+
+  if (diffMin <= 0)  return 'Now'
+  if (diffMin < 60)  return `${diffMin}m`
+
+  const hhmm = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+  const today    = new Date(); today.setHours(0,0,0,0)
+  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1)
+  const matchDay = new Date(d);    matchDay.setHours(0,0,0,0)
+
+  if (matchDay.getTime() === today.getTime())    return `Today ${hhmm}`
+  if (matchDay.getTime() === tomorrow.getTime()) return `Tomorrow ${hhmm}`
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) + ' ' + hhmm
+}
+
+const isSoon = (scheduledAt) => {
+  if (!scheduledAt) return false
+  const diff = new Date(scheduledAt) - Date.now()
+  return diff > 0 && diff <= 60 * 60 * 1000   // within 60 min
+}
+
 export default function LiveBadge({ status, scheduledAt }) {
   if (status === 'live') {
     return (
       <span style={{
         display: 'inline-flex', alignItems: 'center', gap: 5,
-        background: 'rgba(255,68,68,0.15)',
-        border: '1px solid rgba(255,68,68,0.3)',
+        background: 'rgba(255,68,68,0.15)', border: '1px solid rgba(255,68,68,0.3)',
         color: '#ff4444', fontSize: 11, fontWeight: 700,
         padding: '3px 8px', borderRadius: 20, letterSpacing: '.5px',
       }}>
-        <span className="live-dot" />
-        LIVE
+        <span className="live-dot" /> LIVE
       </span>
     )
   }
@@ -17,8 +40,7 @@ export default function LiveBadge({ status, scheduledAt }) {
   if (status === 'finished') {
     return (
       <span style={{
-        background: 'rgba(255,255,255,0.07)',
-        color: 'rgba(255,255,255,0.4)',
+        background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.4)',
         fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 20,
       }}>
         FT
@@ -26,18 +48,29 @@ export default function LiveBadge({ status, scheduledAt }) {
     )
   }
 
-  // scheduled
-  const time = scheduledAt
-    ? new Date(scheduledAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
-    : ''
+  // Scheduled — show SOON badge if within 60 min, otherwise show time label
+  const soon  = isSoon(scheduledAt)
+  const label = getTimeLabel(scheduledAt)
+
+  if (soon) {
+    return (
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+        background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.35)',
+        color: '#f59e0b', fontSize: 11, fontWeight: 700,
+        padding: '3px 8px', borderRadius: 20, letterSpacing: '.3px',
+      }}>
+        ⏱ {label}
+      </span>
+    )
+  }
 
   return (
     <span style={{
-      background: 'rgba(255,255,255,0.07)',
-      color: 'rgba(255,255,255,0.55)',
-      fontSize: 12, fontWeight: 600, padding: '3px 8px', borderRadius: 20,
+      background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.55)',
+      fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 20,
     }}>
-      {time}
+      {label}
     </span>
   )
 }

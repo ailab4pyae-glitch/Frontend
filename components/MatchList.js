@@ -52,7 +52,7 @@ export default function MatchList({ tab }) {
     )
   }
 
-  if (!matches || matches.length === 0) {
+  if (!Array.isArray(matches) || matches.length === 0) {
     return <EmptyState tab={tab} />
   }
 
@@ -60,13 +60,20 @@ export default function MatchList({ tab }) {
   const scheduled = matches.filter((m) => m.status !== 'live' && m.status !== 'finished')
   const finished  = matches.filter((m) => m.status === 'finished')
 
+  // Detect same match appearing from multiple sources (China + SOCO etc.)
+  const norm = (s) => (s || '').toLowerCase().replace(/\s+/g, '')
+  const matchKey = (m) => `${norm(m.home_team)}_${norm(m.away_team)}`
+  const keyCounts = {}
+  for (const m of matches) { const k = matchKey(m); keyCounts[k] = (keyCounts[k] || 0) + 1 }
+  const isMultiSource = (m) => keyCounts[matchKey(m)] > 1
+
   return (
     <div style={{ padding: '0 16px 16px' }}>
       {live.length > 0 && (
         <>
           <SectionLabel>🔴 Live Now ({live.length})</SectionLabel>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {live.map((m) => <MatchCard key={m.id} match={m} />)}
+            {live.map((m) => <MatchCard key={m.id} match={m} multiSource={isMultiSource(m)} />)}
           </div>
         </>
       )}
@@ -75,7 +82,7 @@ export default function MatchList({ tab }) {
         <>
           <SectionLabel>🕐 Upcoming</SectionLabel>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {scheduled.map((m) => <MatchCard key={m.id} match={m} />)}
+            {scheduled.map((m) => <MatchCard key={m.id} match={m} multiSource={isMultiSource(m)} />)}
           </div>
         </>
       )}
@@ -84,7 +91,7 @@ export default function MatchList({ tab }) {
         <>
           <SectionLabel>✅ Finished</SectionLabel>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {finished.map((m) => <MatchCard key={m.id} match={m} />)}
+            {finished.map((m) => <MatchCard key={m.id} match={m} multiSource={isMultiSource(m)} />)}
           </div>
         </>
       )}
