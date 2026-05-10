@@ -2,6 +2,7 @@
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import LiveBadge from './LiveBadge'
+import { proxyLogo } from '../lib/api'
 
 const TeamLogo = ({ src, name, size = 48 }) => {
   const [err, setErr] = useState(false)
@@ -86,7 +87,7 @@ export default function MatchCard({ match }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         {/* Home */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-          <TeamLogo src={match.home_logo} name={match.home_team} />
+          <TeamLogo src={proxyLogo(match.home_logo)} name={match.home_team} />
           <span style={{
             fontSize: 12, fontWeight: 600, textAlign: 'center',
             color: 'rgba(255,255,255,0.9)',
@@ -127,7 +128,7 @@ export default function MatchCard({ match }) {
 
         {/* Away */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-          <TeamLogo src={match.away_logo} name={match.away_team} />
+          <TeamLogo src={proxyLogo(match.away_logo)} name={match.away_team} />
           <span style={{
             fontSize: 12, fontWeight: 600, textAlign: 'center',
             color: 'rgba(255,255,255,0.9)',

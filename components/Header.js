@@ -26,8 +26,8 @@ export default function Header() {
             <path d="M8 5v14l11-7z"/>
           </svg>
         </div>
-        <span style={{ fontWeight: 700, fontSize: 18, letterSpacing: '-0.3px' }}>
-          Stream<span style={{ color: '#00FF87' }}>Zone</span>
+        <span style={{ fontWeight: 700, fontSize: 16, letterSpacing: '-0.3px' }}>
+          ThaeGyiKone<span style={{ color: '#00FF87' }}>ThuLay</span>
         </span>
       </div>
 

@@ -1,7 +1,7 @@
 import './globals.css'
 
 export const metadata = {
-  title: 'StreamZone – Live Football',
+  title: 'ThaeGyiKoneThuLay – Live Football',
   description: 'Watch live football matches from around the world',
 }
 
