@@ -16,7 +16,7 @@ const SectionLabel = ({ children }) => (
   </div>
 )
 
-const EmptyState = ({ tab }) => (
+const EmptyState = () => (
   <div style={{
     display: 'flex', flexDirection: 'column', alignItems: 'center',
     justifyContent: 'center', padding: '60px 24px', gap: 12, textAlign: 'center',
@@ -31,8 +31,33 @@ const EmptyState = ({ tab }) => (
   </div>
 )
 
+const ErrorState = ({ onRetry }) => (
+  <div style={{
+    display: 'flex', flexDirection: 'column', alignItems: 'center',
+    justifyContent: 'center', padding: '60px 24px', gap: 12, textAlign: 'center',
+  }}>
+    <div style={{ fontSize: 48 }}>⚠️</div>
+    <p style={{ fontSize: 15, fontWeight: 600, color: 'rgba(255,255,255,0.6)' }}>
+      Could not load matches
+    </p>
+    <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.3)' }}>
+      Check your connection or try again
+    </p>
+    <button
+      onClick={onRetry}
+      style={{
+        marginTop: 4, background: 'rgba(0,255,135,0.12)',
+        border: '1px solid rgba(0,255,135,0.3)', color: '#00FF87',
+        borderRadius: 20, padding: '8px 20px', fontSize: 13, fontWeight: 700,
+      }}
+    >
+      Retry
+    </button>
+  </div>
+)
+
 export default function MatchList({ tab }) {
-  const { data: matches, isLoading, mutate } = useSWR(
+  const { data: matches, isLoading, error, mutate } = useSWR(
     apiUrl.matches(tab),
     fetcher,
     { refreshInterval: 30000, revalidateOnFocus: true }
@@ -41,6 +66,8 @@ export default function MatchList({ tab }) {
   // Keep refreshInterval reference
   const mutateRef = useRef(mutate)
   useEffect(() => { mutateRef.current = mutate }, [mutate])
+
+  if (error) return <ErrorState onRetry={() => mutate()} />
 
   if (isLoading) {
     return (
@@ -53,7 +80,7 @@ export default function MatchList({ tab }) {
   }
 
   if (!matches || matches.length === 0) {
-    return <EmptyState tab={tab} />
+    return <EmptyState />
   }
 
   const live      = matches.filter((m) => m.status === 'live')
