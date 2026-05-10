@@ -29,33 +29,20 @@ export default function WatchPage() {
   const { id }  = useParams()
   const router  = useRouter()
 
-  const { data: match,   error: matchError }   = useSWR(apiUrl.match(id),   fetcher)
-  const { data: streams, error: streamsError } = useSWR(apiUrl.streams(id), fetcher, { refreshInterval: 60000 })
+  const { data: match }   = useSWR(apiUrl.match(id),   fetcher)
+  const { data: streams } = useSWR(apiUrl.streams(id), fetcher, { refreshInterval: 60000 })
 
-  // SD first (default), then HD
+  // Build flat ordered list: HD first, then SD
   const allUrls = [
-    ...((streams?.SD || []).map((s) => s.url)),
     ...((streams?.HD || []).map((s) => s.url)),
+    ...((streams?.SD || []).map((s) => s.url)),
   ]
 
   const [serverIndex, setServerIndex] = useState(0)
   const activeUrl = allUrls[serverIndex] || null
 
-  // Reset server index when match changes
+  // Reset server index when streams change
   useEffect(() => { setServerIndex(0) }, [id])
-
-  if (matchError) {
-    return (
-      <div style={{ minHeight: '100vh', background: '#0A0E1A', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24, textAlign: 'center' }}>
-        <div style={{ fontSize: 48 }}>📭</div>
-        <p style={{ fontSize: 16, fontWeight: 700, color: 'rgba(255,255,255,0.8)' }}>Match not found</p>
-        <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>This match may have ended or been removed.</p>
-        <button onClick={() => router.back()} style={{ marginTop: 8, background: 'rgba(0,255,135,0.12)', border: '1px solid rgba(0,255,135,0.3)', color: '#00FF87', borderRadius: 20, padding: '8px 20px', fontSize: 13, fontWeight: 700 }}>
-          Go Back
-        </button>
-      </div>
-    )
-  }
 
   const handleError = useCallback(() => {
     setServerIndex((prev) => {
@@ -134,17 +121,11 @@ export default function WatchPage() {
 
         {/* Server selector */}
         <div style={{ padding: 16 }}>
-          {streamsError ? (
-            <div style={{ background: '#141824', borderRadius: 14, border: '1px solid rgba(255,68,68,0.15)', padding: '16px', textAlign: 'center' }}>
-              <p style={{ fontSize: 13, color: 'rgba(255,100,100,0.8)' }}>Failed to load streams. Retrying…</p>
-            </div>
-          ) : (
-            <ServerSelector
-              streams={streams || { SD: [], HD: [] }}
-              activeUrl={activeUrl}
-              onSelect={handleSelect}
-            />
-          )}
+          <ServerSelector
+            streams={streams || { SD: [], HD: [] }}
+            activeUrl={activeUrl}
+            onSelect={handleSelect}
+          />
         </div>
 
         {/* Server count info */}

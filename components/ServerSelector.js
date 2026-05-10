@@ -2,8 +2,8 @@
 
 export default function ServerSelector({ streams = { SD: [], HD: [] }, activeUrl, onSelect }) {
   const allServers = [
-    ...streams.SD.map((s, i) => ({ ...s, label: `SD ${i + 1}`, quality: 'SD' })),
     ...streams.HD.map((s, i) => ({ ...s, label: `HD ${i + 1}`, quality: 'HD' })),
+    ...streams.SD.map((s, i) => ({ ...s, label: `SD ${i + 1}`, quality: 'SD' })),
   ]
 
   if (allServers.length === 0) {

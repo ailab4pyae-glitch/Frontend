@@ -61,7 +61,6 @@ export default function BottomNav() {
               alignItems: 'center', justifyContent: 'center', gap: 3,
               background: 'none', border: 'none', cursor: 'pointer',
               opacity: href === '#' ? 0.4 : 1,
-              position: 'relative',
             }}
           >
             {icon(active)}
