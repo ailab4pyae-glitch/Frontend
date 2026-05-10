@@ -41,8 +41,22 @@ export default function WatchPage() {
   const [serverIndex, setServerIndex] = useState(0)
   const activeUrl = allUrls[serverIndex] || null
 
-  // Reset server index when streams change
-  useEffect(() => { setServerIndex(0) }, [id])
+  // On match change: restore saved server preference, or default to 0
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(`watch_pref_${id}`)
+      const idx = saved !== null ? parseInt(saved, 10) : 0
+      setServerIndex(isNaN(idx) ? 0 : idx)
+    } catch (_) {
+      setServerIndex(0)
+    }
+  }, [id])
+
+  // When streams refresh, clamp index to valid range (server may have been removed)
+  useEffect(() => {
+    if (!allUrls.length) return
+    setServerIndex((prev) => Math.min(prev, allUrls.length - 1))
+  }, [allUrls.length])
 
   const handleError = useCallback(() => {
     setServerIndex((prev) => {
@@ -53,8 +67,11 @@ export default function WatchPage() {
 
   const handleSelect = useCallback((url) => {
     const idx = allUrls.indexOf(url)
-    if (idx !== -1) setServerIndex(idx)
-  }, [allUrls])
+    if (idx !== -1) {
+      setServerIndex(idx)
+      try { localStorage.setItem(`watch_pref_${id}`, String(idx)) } catch (_) {}
+    }
+  }, [allUrls, id])
 
   return (
     <div style={{ minHeight: '100vh', background: '#0A0E1A' }}>

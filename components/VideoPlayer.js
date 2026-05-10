@@ -13,6 +13,12 @@ const getNetworkTier = () => {
   return 'medium'
 }
 
+const RotateIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M16.48 2.52c3.27 1.55 5.61 4.72 5.97 8.48h1.5C23.44 4.84 18.29 0 12 0l-.66.03 3.81 3.81 1.33-1.32zm-6.25-.77c-.59-.59-1.54-.59-2.12 0L1.75 8.11c-.59.59-.59 1.54 0 2.12l12.02 12.02c.59.59 1.54.59 2.12 0l6.36-6.36c.59-.59.59-1.54 0-2.12L10.23 1.75zm4.6 19.44L2.81 9.17l6.36-6.36 12.02 12.02-6.36 6.36zm-7.31.29C4.25 19.94 1.91 16.76 1.55 13H.05C.56 19.16 5.71 24 12 24l.66-.03-3.81-3.81-1.33 1.32z"/>
+  </svg>
+)
+
 export default function VideoPlayer({ url, isLive = false, onError }) {
   const videoRef  = useRef(null)
   const hlsRef    = useRef(null)
@@ -20,6 +26,15 @@ export default function VideoPlayer({ url, isLive = false, onError }) {
   const timersRef = useRef([])
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(false)
+
+  const handleRotate = useCallback(async () => {
+    const el = videoRef.current
+    if (!el) return
+    try {
+      await el.requestFullscreen()
+      if (screen.orientation?.lock) await screen.orientation.lock('landscape').catch(() => {})
+    } catch (_) {}
+  }, [])
 
   const clearTimers = useCallback(() => {
     timersRef.current.forEach(clearInterval)
@@ -177,16 +192,20 @@ export default function VideoPlayer({ url, isLive = false, onError }) {
         style={{ width: '100%', height: '100%', objectFit: 'contain', display: error ? 'none' : 'block' }}
       />
 
-      {isLive && !loading && !error && (
-        <div style={{
-          position: 'absolute', top: 12, left: 12,
-          display: 'flex', alignItems: 'center', gap: 5,
-          background: 'rgba(255,68,68,0.85)', backdropFilter: 'blur(4px)',
-          borderRadius: 20, padding: '3px 10px',
-          fontSize: 11, fontWeight: 800, letterSpacing: 1, color: '#fff',
-        }}>
-          <span className="live-dot" /> LIVE
-        </div>
+      {!loading && !error && (
+        <button
+          onClick={handleRotate}
+          style={{
+            position: 'absolute', bottom: 48, right: 10,
+            background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
+            border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8,
+            color: '#fff', padding: '6px 8px', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+          title="Rotate to landscape"
+        >
+          <RotateIcon />
+        </button>
       )}
 
       {loading && !error && (
