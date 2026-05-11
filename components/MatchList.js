@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useMemo } from 'react'
 import useSWR from 'swr'
 import { fetcher, apiUrl } from '@/lib/api'
 import MatchCard from './MatchCard'
@@ -42,6 +42,15 @@ export default function MatchList({ tab }) {
   const mutateRef = useRef(mutate)
   useEffect(() => { mutateRef.current = mutate }, [mutate])
 
+  const isMultiSource = useMemo(() => {
+    if (!Array.isArray(matches)) return () => false
+    const norm = (s) => (s || '').toLowerCase().replace(/\s+/g, '')
+    const key = (m) => `${norm(m.home_team)}_${norm(m.away_team)}`
+    const counts = {}
+    for (const m of matches) { const k = key(m); counts[k] = (counts[k] || 0) + 1 }
+    return (m) => counts[key(m)] > 1
+  }, [matches])
+
   if (isLoading) {
     return (
       <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 8 }}>
@@ -59,13 +68,6 @@ export default function MatchList({ tab }) {
   const live      = matches.filter((m) => m.status === 'live')
   const scheduled = matches.filter((m) => m.status !== 'live' && m.status !== 'finished')
   const finished  = matches.filter((m) => m.status === 'finished')
-
-  // Detect same match appearing from multiple sources (China + SOCO etc.)
-  const norm = (s) => (s || '').toLowerCase().replace(/\s+/g, '')
-  const matchKey = (m) => `${norm(m.home_team)}_${norm(m.away_team)}`
-  const keyCounts = {}
-  for (const m of matches) { const k = matchKey(m); keyCounts[k] = (keyCounts[k] || 0) + 1 }
-  const isMultiSource = (m) => keyCounts[matchKey(m)] > 1
 
   return (
     <div style={{ padding: '0 16px 16px' }}>

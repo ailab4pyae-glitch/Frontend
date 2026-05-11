@@ -1,72 +1,21 @@
 'use client'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
 import LiveBadge from './LiveBadge'
-import { proxyLogo } from '../lib/api'
-
-const TeamLogo = ({ src, name, size = 48 }) => {
-  const [err, setErr] = useState(false)
-  if (!err && src) {
-    return (
-      <img
-        src={src} alt={name}
-        onError={() => setErr(true)}
-        style={{ width: size, height: size, objectFit: 'contain', borderRadius: 6 }}
-      />
-    )
-  }
-  // Fallback initials
-  const initials = (name || '?').slice(0, 2).toUpperCase()
-  return (
-    <div style={{
-      width: size, height: size, borderRadius: 8,
-      background: 'rgba(0,255,135,0.1)',
-      border: '1px solid rgba(0,255,135,0.2)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: size * 0.28, fontWeight: 700, color: '#00FF87',
-    }}>
-      {initials}
-    </div>
-  )
-}
-
-const SOURCE_LABEL = {
-  'soco-live':  'SOCO',
-  'china-live': 'China',
-  'loungsan':   'Loungsan',
-  'english':    'ENG',
-  'main-live':  '',
-}
-
-const getScheduleLabel = (scheduledAt) => {
-  if (!scheduledAt) return ''
-  const d   = new Date(scheduledAt)
-  const now = new Date()
-  const diffMin = Math.round((d - now) / 60000)
-  if (diffMin > 0 && diffMin < 60) return `${diffMin} min`
-  const hhmm  = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
-  const today = new Date(); today.setHours(0,0,0,0)
-  const tom   = new Date(today); tom.setDate(today.getDate() + 1)
-  const day   = new Date(d);    day.setHours(0,0,0,0)
-  if (day.getTime() === today.getTime()) return hhmm
-  if (day.getTime() === tom.getTime())   return `Tom ${hhmm}`
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ' ' + hhmm
-}
-
-const isSoon = (scheduledAt) => {
-  if (!scheduledAt) return false
-  const diff = new Date(scheduledAt) - Date.now()
-  return diff > 0 && diff <= 60 * 60 * 1000
-}
+import { proxyLogo, isSoon, getScheduleLabel, formatDate, formatTime } from '../lib/api'
+import { useConfig } from '../lib/config'
+import TeamLogo from './TeamLogo'
 
 export default function MatchCard({ match, multiSource = false }) {
-  const router = useRouter()
+  const router           = useRouter()
+  const { tabMap }       = useConfig()
+  const sourceTab        = tabMap[match.source_tab]
+  const sourceLabel      = sourceTab?.name  || ''
+  const sourceDotColor   = sourceTab?.color || '#00FF87'
 
   const isLive      = match.status === 'live'
   const isFinished  = match.status === 'finished'
   const soon        = !isLive && !isFinished && isSoon(match.scheduled_at)
   const schedLabel  = getScheduleLabel(match.scheduled_at)
-  const sourceLabel = SOURCE_LABEL[match.source_tab] || ''
 
   return (
     <div
@@ -90,7 +39,7 @@ export default function MatchCard({ match, multiSource = false }) {
           {isLive && (
             <div style={{
               width: 3, height: 14, borderRadius: 2,
-              background: '#ff4444', flexShrink: 0,
+              background: sourceDotColor, flexShrink: 0,
             }} />
           )}
           <span style={{
@@ -154,9 +103,7 @@ export default function MatchCard({ match, multiSource = false }) {
               )}
               {match.scheduled_at && (
                 <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
-                  {new Date(match.scheduled_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
-                  {' '}
-                  {new Date(match.scheduled_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                  {formatDate(match.scheduled_at)} {formatTime(match.scheduled_at)}
                 </span>
               )}
             </>

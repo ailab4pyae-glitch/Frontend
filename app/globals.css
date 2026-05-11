@@ -1,3 +1,5 @@
+@import 'plyr/dist/plyr.css';
+
 *, *::before, *::after {
   margin: 0;
   padding: 0;
@@ -87,3 +89,17 @@ img { display: block; }
   0%   { transform: scale(1); opacity: .5; }
   100% { transform: scale(2.2); opacity: 0; }
 }
+
+/* ── Plyr theme ── */
+:root {
+  --plyr-color-main:                #00FF87;
+  --plyr-range-fill-background:     #00FF87;
+  --plyr-video-controls-background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0.72));
+  --plyr-video-control-color:       rgba(255,255,255,0.88);
+  --plyr-control-radius:            6px;
+  --plyr-font-family:               -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --plyr-font-size-base:            13px;
+}
+.plyr          { width: 100%; height: 100%; }
+.plyr--video   { overflow: hidden; border-radius: inherit; }
+.plyr__video-wrapper { height: 100%; }

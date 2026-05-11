@@ -19,11 +19,13 @@ const RotateIcon = () => (
   </svg>
 )
 
-export default function VideoPlayer({ url, isLive = false, onError }) {
-  const videoRef  = useRef(null)
-  const hlsRef    = useRef(null)
-  const flvRef    = useRef(null)
-  const timersRef = useRef([])
+export default function VideoPlayer({ url, isLive = false, onError, allExhausted = false }) {
+  const videoRef       = useRef(null)
+  const hlsRef         = useRef(null)
+  const flvRef         = useRef(null)
+  const plyrRef        = useRef(null)
+  const timersRef      = useRef([])
+  const loadTimeoutRef = useRef(null)
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(false)
 
@@ -39,16 +41,24 @@ export default function VideoPlayer({ url, isLive = false, onError }) {
   const clearTimers = useCallback(() => {
     timersRef.current.forEach(clearInterval)
     timersRef.current = []
+    if (loadTimeoutRef.current) { clearTimeout(loadTimeoutRef.current); loadTimeoutRef.current = null }
   }, [])
 
   const handleError = useCallback(() => {
-    setError(true)
-    setLoading(false)
     clearTimers()
-    onError?.()
-  }, [onError, clearTimers])
+    if (onError && !allExhausted) {
+      // more servers available — switch silently, keep spinner visible
+      setLoading(true)
+      setError(false)
+      onError()
+    } else {
+      // last server exhausted — show error screen
+      setError(true)
+      setLoading(false)
+    }
+  }, [onError, allExhausted, clearTimers])
 
-  const destroyPlayers = useCallback(() => {
+  const destroyStream = useCallback(() => {
     clearTimers()
     if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null }
     if (flvRef.current) {
@@ -57,7 +67,7 @@ export default function VideoPlayer({ url, isLive = false, onError }) {
     }
   }, [clearTimers])
 
-  // Stall detector — if currentTime doesn't move for 8 × 5s = 40s → switch server
+  // Stall detector — if currentTime doesn't move for 8 × 5s = 40s → error
   const startStallDetector = useCallback((video) => {
     let lastTime = -1, stallCount = 0
     const id = setInterval(() => {
@@ -82,12 +92,40 @@ export default function VideoPlayer({ url, isLive = false, onError }) {
     timersRef.current.push(id)
   }, [])
 
+  // Plyr — initialise once on mount, destroy on unmount
+  useEffect(() => {
+    if (!videoRef.current) return
+    let cancelled = false
+    let plyr = null
+
+    ;(async () => {
+      const Plyr = (await import('plyr')).default
+      if (cancelled || !videoRef.current) return
+      plyr = new Plyr(videoRef.current, {
+        controls: ['play', 'progress', 'current-time', 'mute', 'volume', 'fullscreen'],
+        hideControls: true,
+        resetOnEnd: false,
+        keyboard: { focused: true, global: false },
+        tooltips: { controls: false, seek: false },
+        fullscreen: { enabled: true, fallback: true, iosNative: false },
+      })
+      plyrRef.current = plyr
+    })()
+
+    return () => {
+      cancelled = true
+      if (plyr) { try { plyr.destroy() } catch (_) {} }
+      plyrRef.current = null
+    }
+  }, []) // once per mount (component is keyed by url in watch page)
+
+  // Stream loading
   useEffect(() => {
     if (!url || !videoRef.current) return
     const video = videoRef.current
     setLoading(true)
     setError(false)
-    destroyPlayers()
+    destroyStream()
 
     const tier = getNetworkTier()
     let ready = false
@@ -95,19 +133,17 @@ export default function VideoPlayer({ url, isLive = false, onError }) {
     const onReady = () => {
       if (ready) return
       ready = true
+      if (loadTimeoutRef.current) { clearTimeout(loadTimeoutRef.current); loadTimeoutRef.current = null }
       setLoading(false)
       video.play().catch(() => {})
       startStallDetector(video)
       if (isLive) startLiveCatchup(video)
     }
 
-    // Hard load timeout — if stream hasn't started in 40s, switch
-    const loadTimeout = setTimeout(() => { if (!ready) handleError() }, 40000)
-    timersRef.current.push(loadTimeout)
+    loadTimeoutRef.current = setTimeout(() => { if (!ready) handleError() }, 40000)
 
     if (isFlv(url)) {
-      // ── FLV ────────────────────────────────────────────────────────────────
-      const initFlv = async () => {
+      ;(async () => {
         const flvjs = (await import('flv.js')).default
         if (!flvjs.isSupported()) { handleError(); return }
         const player = flvjs.createPlayer(
@@ -125,39 +161,36 @@ export default function VideoPlayer({ url, isLive = false, onError }) {
         player.load()
         player.on(flvjs.Events.ERROR, () => handleError())
         player.on(flvjs.Events.MEDIA_INFO, () => onReady())
-      }
-      initFlv()
+      })()
     } else {
-      // ── HLS ────────────────────────────────────────────────────────────────
-      const initHls = async () => {
+      ;(async () => {
         const Hls = (await import('hls.js')).default
         if (Hls.isSupported()) {
           const cfg = isLive
             ? {
-                maxBufferLength:              8,
-                maxMaxBufferLength:           16,
-                liveSyncDurationCount:        2,
-                liveMaxLatencyDurationCount:  6,
-                backBufferLength:             4,
-                // Fewer retries = faster failure detection (was 4+6 retries ~15s)
-                manifestLoadingMaxRetry:      1,
-                fragLoadingMaxRetry:          2,
+                maxBufferLength:                8,
+                maxMaxBufferLength:             16,
+                liveSyncDurationCount:          2,
+                liveMaxLatencyDurationCount:    6,
+                backBufferLength:               4,
+                manifestLoadingMaxRetry:        1,
+                fragLoadingMaxRetry:            2,
                 manifestLoadingMaxRetryTimeout: 2000,
-                fragLoadingMaxRetryTimeout:   2000,
-                nudgeMaxRetry:                3,
-                enableWorker:                 true,
+                fragLoadingMaxRetryTimeout:     2000,
+                nudgeMaxRetry:                  3,
+                enableWorker:                   true,
               }
             : {
-                maxBufferLength:            tier === 'slow' ? 90  : 60,
-                maxMaxBufferLength:         tier === 'slow' ? 180 : 120,
-                startLevel:                 tier === 'slow' ? 0   : -1,
-                abrEwmaDefaultEstimate:     tier === 'slow' ? 300000 : 1000000,
-                backBufferLength:           tier === 'slow' ? 30  : 15,
-                manifestLoadingMaxRetry:    1,
-                fragLoadingMaxRetry:        2,
+                maxBufferLength:                tier === 'slow' ? 90  : 60,
+                maxMaxBufferLength:             tier === 'slow' ? 180 : 120,
+                startLevel:                     tier === 'slow' ? 0   : -1,
+                abrEwmaDefaultEstimate:         tier === 'slow' ? 300000 : 1000000,
+                backBufferLength:               tier === 'slow' ? 30  : 15,
+                manifestLoadingMaxRetry:        1,
+                fragLoadingMaxRetry:            2,
                 manifestLoadingMaxRetryTimeout: 2000,
-                fragLoadingMaxRetryTimeout: 2000,
-                enableWorker:               true,
+                fragLoadingMaxRetryTimeout:     2000,
+                enableWorker:                   true,
               }
 
           const hls = new Hls(cfg)
@@ -176,29 +209,28 @@ export default function VideoPlayer({ url, isLive = false, onError }) {
         } else {
           handleError()
         }
-      }
-      initHls()
+      })()
     }
 
-    return () => destroyPlayers()
-  }, [url, isLive, handleError, destroyPlayers, startStallDetector, startLiveCatchup])
+    return () => destroyStream()
+  }, [url, isLive, handleError, destroyStream, startStallDetector, startLiveCatchup])
 
   return (
     <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', background: '#000', borderRadius: 12, overflow: 'hidden' }}>
       <video
         ref={videoRef}
         playsInline
-        controls
-        style={{ width: '100%', height: '100%', objectFit: 'contain', display: error ? 'none' : 'block' }}
+        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
       />
 
+      {/* Rotate button — sits above Plyr controls bar (~44px) */}
       {!loading && !error && (
         <button
           onClick={handleRotate}
           style={{
-            position: 'absolute', bottom: 48, right: 10,
-            background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
-            border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8,
+            position: 'absolute', bottom: 52, right: 10, zIndex: 20,
+            background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)',
+            border: '1px solid rgba(255,255,255,0.18)', borderRadius: 8,
             color: '#fff', padding: '6px 8px', cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}
@@ -210,7 +242,7 @@ export default function VideoPlayer({ url, isLive = false, onError }) {
 
       {loading && !error && (
         <div style={{
-          position: 'absolute', inset: 0,
+          position: 'absolute', inset: 0, zIndex: 30,
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
           gap: 14, background: '#000',
         }}>
@@ -221,7 +253,7 @@ export default function VideoPlayer({ url, isLive = false, onError }) {
 
       {error && (
         <div style={{
-          position: 'absolute', inset: 0,
+          position: 'absolute', inset: 0, zIndex: 30,
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
           gap: 14, background: '#0a0e1a', padding: 24, textAlign: 'center',
         }}>

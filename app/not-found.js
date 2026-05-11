@@ -1,8 +1,6 @@
-'use client'
-import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 
 export default function NotFound() {
-  const router = useRouter()
   return (
     <div style={{
       minHeight: '100vh', background: '#0A0E1A', color: '#fff',
@@ -16,19 +14,19 @@ export default function NotFound() {
       <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.4)', maxWidth: 280 }}>
         This page doesn&apos;t exist or the match may have ended.
       </p>
-      <button
-        onClick={() => router.push('/')}
+      <Link
+        href="/"
         style={{
           marginTop: 8,
           background: 'rgba(0,255,135,0.12)',
           border: '1px solid rgba(0,255,135,0.3)',
           color: '#00FF87', borderRadius: 20,
           padding: '10px 24px', fontSize: 14, fontWeight: 700,
-          cursor: 'pointer',
+          textDecoration: 'none', display: 'inline-block',
         }}
       >
         Back to Live
-      </button>
+      </Link>
     </div>
   )
 }

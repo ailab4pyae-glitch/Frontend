@@ -1,29 +1,12 @@
 'use client'
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import useSWR from 'swr'
-import { fetcher, apiUrl } from '@/lib/api'
+import { fetcher, apiUrl, formatDate, formatTime } from '@/lib/api'
+import LiveBadge from '@/components/LiveBadge'
 import VideoPlayer from '@/components/VideoPlayer'
 import ServerSelector from '@/components/ServerSelector'
-import LiveBadge from '@/components/LiveBadge'
-
-const TeamLogo = ({ src, name }) => {
-  const [err, setErr] = useState(false)
-  if (!err && src) {
-    return <img src={src} alt={name} onError={() => setErr(true)}
-      style={{ width: 36, height: 36, objectFit: 'contain', borderRadius: 4 }} />
-  }
-  return (
-    <div style={{
-      width: 36, height: 36, borderRadius: 6,
-      background: 'rgba(0,255,135,0.1)', border: '1px solid rgba(0,255,135,0.2)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: 12, fontWeight: 700, color: '#00FF87',
-    }}>
-      {(name || '?').slice(0, 2).toUpperCase()}
-    </div>
-  )
-}
+import TeamLogo from '@/components/TeamLogo'
 
 export default function WatchPage() {
   const { id }  = useParams()
@@ -32,16 +15,15 @@ export default function WatchPage() {
   const { data: match }   = useSWR(apiUrl.match(id),   fetcher)
   const { data: streams } = useSWR(apiUrl.streams(id), fetcher, { refreshInterval: 60000 })
 
-  // SD first (default), HD as fallback
-  const allUrls = [
+  const allUrls = useMemo(() => [
     ...((streams?.SD || []).map((s) => s.url)),
     ...((streams?.HD || []).map((s) => s.url)),
-  ]
+  ], [streams])
 
-  const [serverIndex, setServerIndex] = useState(0)
+  const [serverIndex,  setServerIndex]  = useState(0)
+  const [allExhausted, setAllExhausted] = useState(false)
   const activeUrl = allUrls[serverIndex] || null
 
-  // On match change: restore saved server preference, or default to 0
   useEffect(() => {
     try {
       const saved = localStorage.getItem(`watch_pref_${id}`)
@@ -52,16 +34,22 @@ export default function WatchPage() {
     }
   }, [id])
 
-  // When streams refresh, clamp index to valid range (server may have been removed)
+  // When streams refresh, clamp index and reset exhausted flag (new URLs may be healthy)
   useEffect(() => {
     if (!allUrls.length) return
     setServerIndex((prev) => Math.min(prev, allUrls.length - 1))
+    setAllExhausted(false)
   }, [allUrls.length])
 
   const handleError = useCallback(() => {
     setServerIndex((prev) => {
       const next = prev + 1
-      return next < allUrls.length ? next : prev
+      if (next < allUrls.length) {
+        setAllExhausted(false)
+        return next
+      }
+      setAllExhausted(true)
+      return prev
     })
   }, [allUrls.length])
 
@@ -100,7 +88,7 @@ export default function WatchPage() {
         {/* Video Player */}
         <div style={{ background: '#000' }}>
           {activeUrl
-            ? <VideoPlayer key={activeUrl} url={activeUrl} isLive={match?.status === 'live'} onError={handleError} />
+            ? <VideoPlayer key={activeUrl} url={activeUrl} isLive={match?.status === 'live'} onError={handleError} allExhausted={allExhausted} />
             : (
               <div style={{
                 aspectRatio: '16/9', display: 'flex', flexDirection: 'column',
@@ -128,7 +116,7 @@ export default function WatchPage() {
               </p>
               <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>
                 {match.status === 'live' ? 'Ongoing' : match.scheduled_at
-                  ? new Date(match.scheduled_at).toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })
+                  ? `${formatDate(match.scheduled_at)} ${formatTime(match.scheduled_at)}`
                   : ''}
               </p>
             </div>

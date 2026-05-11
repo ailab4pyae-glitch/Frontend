@@ -1,23 +1,29 @@
 'use client'
-import { useState } from 'react'
-import useSWR from 'swr'
-import { fetcher, apiUrl } from '@/lib/api'
+import { useState, useEffect } from 'react'
+import { useConfig } from '@/lib/config'
 import Header from '@/components/Header'
 import TabStrip from '@/components/TabStrip'
 import MatchList from '@/components/MatchList'
 import BottomNav from '@/components/BottomNav'
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState('main-live')
+  const { tabs, ui } = useConfig()
 
-  const { data: tabs } = useSWR(apiUrl.tabs(), fetcher, {
-    revalidateOnFocus: false,
-  })
+  // Derive the default tab from backend config; fall back to first tab or 'main-live'
+  const defaultTab = ui?.defaultTab || tabs[0]?.slug || 'main-live'
+  const [activeTab, setActiveTab] = useState(defaultTab)
+
+  // Once config loads, sync activeTab if the user hasn't manually switched yet
+  useEffect(() => {
+    if (tabs.length > 0 && activeTab === 'main-live') {
+      setActiveTab(defaultTab)
+    }
+  }, [defaultTab]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0A0E1A' }}>
+    <div style={{ minHeight: '100vh', background: ui?.bgColor || '#0A0E1A' }}>
       <Header />
-      <TabStrip tabs={Array.isArray(tabs) ? tabs : []} activeTab={activeTab} onTabChange={setActiveTab} />
+      <TabStrip tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
       <main>
         <MatchList key={activeTab} tab={activeTab} />
       </main>

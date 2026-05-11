@@ -1,27 +1,4 @@
-const getTimeLabel = (scheduledAt) => {
-  if (!scheduledAt) return ''
-  const d   = new Date(scheduledAt)
-  const now = new Date()
-  const diffMin = Math.round((d - now) / 60000)
-
-  if (diffMin <= 0)  return 'Now'
-  if (diffMin < 60)  return `${diffMin}m`
-
-  const hhmm = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
-  const today    = new Date(); today.setHours(0,0,0,0)
-  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1)
-  const matchDay = new Date(d);    matchDay.setHours(0,0,0,0)
-
-  if (matchDay.getTime() === today.getTime())    return `Today ${hhmm}`
-  if (matchDay.getTime() === tomorrow.getTime()) return `Tomorrow ${hhmm}`
-  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) + ' ' + hhmm
-}
-
-const isSoon = (scheduledAt) => {
-  if (!scheduledAt) return false
-  const diff = new Date(scheduledAt) - Date.now()
-  return diff > 0 && diff <= 60 * 60 * 1000   // within 60 min
-}
+import { isSoon, getTimeLabel } from '../lib/api'
 
 export default function LiveBadge({ status, scheduledAt }) {
   if (status === 'live') {

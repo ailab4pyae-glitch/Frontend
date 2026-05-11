@@ -1,13 +1,5 @@
 'use client'
 
-const TAB_ICONS = {
-  'main-live':  '⚡',
-  'soco-live':  '🔴',
-  'china-live': '🇨🇳',
-  'loungsan':   '📡',
-  'english':    '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
-}
-
 export default function TabStrip({ tabs = [], activeTab, onTabChange }) {
   return (
     <div style={{
@@ -26,7 +18,8 @@ export default function TabStrip({ tabs = [], activeTab, onTabChange }) {
                 style={{ width: 90, height: 34, borderRadius: 20, flexShrink: 0 }} />
             ))
           : tabs.map((tab) => {
-              const active = tab.slug === activeTab
+              const active     = tab.slug === activeTab
+              const accentColor = tab.color || '#00FF87'
               return (
                 <button
                   key={tab.slug}
@@ -35,16 +28,16 @@ export default function TabStrip({ tabs = [], activeTab, onTabChange }) {
                     flexShrink: 0,
                     padding: '7px 16px',
                     borderRadius: 20,
-                    border: 'none',
+                    border: active ? 'none' : '1px solid rgba(255,255,255,0.08)',
                     fontSize: 13, fontWeight: 600,
                     cursor: 'pointer',
                     whiteSpace: 'nowrap',
                     transition: 'all .2s',
-                    background: active ? '#00FF87' : 'rgba(255,255,255,0.07)',
-                    color:      active ? '#0A0E1A' : 'rgba(255,255,255,0.55)',
+                    background: active ? accentColor : 'rgba(255,255,255,0.05)',
+                    color:      active ? '#0A0E1A'   : 'rgba(255,255,255,0.55)',
                   }}
                 >
-                  {TAB_ICONS[tab.slug] || '●'} {tab.name}
+                  {tab.icon || '⚽'} {tab.name}
                 </button>
               )
             })
