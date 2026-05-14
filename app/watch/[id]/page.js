@@ -15,6 +15,7 @@ export default function WatchPage() {
   const { data: match }   = useSWR(apiUrl.match(id),   fetcher)
   const { data: streams } = useSWR(apiUrl.streams(id), fetcher, { refreshInterval: 60000 })
 
+  // SD first — default (index 0) plays SD for low-bandwidth users, HD available to switch manually
   const allUrls = useMemo(() => [
     ...((streams?.SD || []).map((s) => s.url)),
     ...((streams?.HD || []).map((s) => s.url)),
@@ -92,12 +93,27 @@ export default function WatchPage() {
             : (
               <div style={{
                 aspectRatio: '16/9', display: 'flex', flexDirection: 'column',
-                alignItems: 'center', justifyContent: 'center', gap: 12,
-                background: '#000', color: 'rgba(255,255,255,0.4)',
+                alignItems: 'center', justifyContent: 'center', gap: 10,
+                background: '#0a0a0a', color: 'rgba(255,255,255,0.4)',
+                padding: '0 24px', textAlign: 'center',
               }}>
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="rgba(255,255,255,0.2)"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
-                <p style={{ fontSize: 14 }}>No stream available</p>
-                <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>Stream will appear at kickoff</p>
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="rgba(255,255,255,0.15)"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+                <p style={{ fontSize: 14, fontWeight: 700, color: 'rgba(255,255,255,0.6)', margin: 0 }}>
+                  No servers available yet
+                </p>
+                <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', margin: 0, lineHeight: 1.6 }}>
+                  Stream will appear at kickoff
+                </p>
+                {match?.source_name === 'socolive' || match?.tab_id && (
+                  <div style={{
+                    marginTop: 6, padding: '8px 14px', borderRadius: 8,
+                    background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)',
+                    fontSize: 11, color: '#f59e0b', lineHeight: 1.6, maxWidth: 280,
+                  }}>
+                    ⚠️ SOCO streams require Asian IP.<br />
+                    US/EU VPN will block CDN access.
+                  </div>
+                )}
               </div>
             )
           }

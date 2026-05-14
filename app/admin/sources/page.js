@@ -13,6 +13,145 @@ const inp = (extra = {}) => ({
 
 const DRIVER_LABELS = { playwright: '🎭 Playwright', http: '🌐 HTTP', api: '⚡ API' }
 
+const STATUS_STYLE = {
+  ok:      { color: '#00FF87', bg: 'rgba(0,255,135,0.08)',  border: 'rgba(0,255,135,0.2)',  icon: '✅' },
+  warning: { color: '#f59e0b', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.2)', icon: '⚠️' },
+  timeout: { color: '#f97316', bg: 'rgba(249,115,22,0.08)', border: 'rgba(249,115,22,0.2)', icon: '⏱️' },
+  error:   { color: '#ef4444', bg: 'rgba(239,68,68,0.08)',  border: 'rgba(239,68,68,0.2)',  icon: '❌' },
+  banned:  { color: '#ef4444', bg: 'rgba(239,68,68,0.08)',  border: 'rgba(239,68,68,0.2)',  icon: '🚫' },
+}
+
+function BanCheckPanel() {
+  const [results,  setResults]  = useState(null)
+  const [checking, setChecking] = useState(false)
+  const [checkedAt, setCheckedAt] = useState(null)
+
+  const run = async () => {
+    setChecking(true)
+    setResults(null)
+    try {
+      const data = await adminFetch('/api/admin/scrapers/ban-check')
+      setResults(data)
+      setCheckedAt(new Date().toLocaleTimeString())
+    } catch (e) {
+      setResults([{ slug: 'error', overall: 'error', checks: [{ url: '', status: 'error', reason: e.message }] }])
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  return (
+    <div style={{
+      background: '#141824', borderRadius: 12,
+      border: '1px solid rgba(255,255,255,0.08)',
+      padding: '20px 22px', marginBottom: 28,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: results ? 18 : 0 }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 18 }}>🛡️</span>
+            <span style={{ color: '#fff', fontWeight: 700, fontSize: 16 }}>IP Ban Check</span>
+          </div>
+          <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 12, margin: '4px 0 0' }}>
+            Test if your server IP is blocked by each scraper source
+            {checkedAt && <span style={{ marginLeft: 8, color: 'rgba(255,255,255,0.2)' }}>Last checked: {checkedAt}</span>}
+          </p>
+        </div>
+        <button
+          onClick={run}
+          disabled={checking}
+          style={{
+            border: 'none', borderRadius: 8, padding: '10px 20px',
+            background: checking ? 'rgba(255,255,255,0.08)' : '#00FF87',
+            color: checking ? 'rgba(255,255,255,0.4)' : '#0A0E1A',
+            fontWeight: 700, fontSize: 13, cursor: checking ? 'not-allowed' : 'pointer',
+            flexShrink: 0, transition: 'all .2s',
+          }}
+        >
+          {checking ? '⏳ Checking…' : '▶ Run Check'}
+        </button>
+      </div>
+
+      {results && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {results.map((r) => {
+            const st = STATUS_STYLE[r.overall] || STATUS_STYLE.error
+            return (
+              <div key={r.slug} style={{
+                borderRadius: 10, border: `1px solid ${st.border}`,
+                background: st.bg, padding: '14px 16px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <span style={{ fontSize: 16 }}>{st.icon}</span>
+                  <span style={{ color: '#fff', fontWeight: 700, fontSize: 14, textTransform: 'capitalize' }}>
+                    {r.slug}
+                  </span>
+                  <span style={{
+                    fontSize: 11, padding: '2px 8px', borderRadius: 20, fontWeight: 700,
+                    background: st.bg, color: st.color, border: `1px solid ${st.border}`,
+                    textTransform: 'uppercase',
+                  }}>
+                    {r.overall}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {r.checks.map((c, i) => {
+                    const cs = STATUS_STYLE[c.status] || STATUS_STYLE.error
+                    return (
+                      <div key={i} style={{
+                        display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+                        background: 'rgba(0,0,0,0.2)', borderRadius: 8, padding: '8px 12px',
+                        gap: 12, flexWrap: 'wrap',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                          <span style={{ fontSize: 13 }}>{cs.icon}</span>
+                          <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, wordBreak: 'break-all' }}>
+                            {c.url || '—'}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                          {c.http && (
+                            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>
+                              HTTP {c.http}
+                            </span>
+                          )}
+                          {c.latency_ms && (
+                            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>
+                              {c.latency_ms}ms
+                            </span>
+                          )}
+                          <span style={{ fontSize: 11, fontWeight: 700, color: cs.color, textTransform: 'uppercase' }}>
+                            {c.status}
+                          </span>
+                        </div>
+                        {c.reason && (
+                          <div style={{ width: '100%', fontSize: 11, color: cs.color, paddingLeft: 21 }}>
+                            {c.reason}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {r.overall !== 'ok' && (
+                  <div style={{ marginTop: 10, fontSize: 12, color: 'rgba(255,255,255,0.4)', paddingLeft: 4 }}>
+                    {r.overall === 'banned'  && '🔧 Fix: Change server region or set SCRAPER_PROXY in env vars'}
+                    {r.overall === 'timeout' && '🔧 Fix: IP may be blocked — try changing server region first'}
+                    {r.overall === 'error'   && '🔧 Fix: Source site may be down or your server has no outbound access'}
+                    {r.overall === 'warning' && '🔧 Fix: Site may have redesigned — check scraper selectors'}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function SourcesPage() {
   const [sources, setSources] = useState(null)
   const [saving, setSaving]   = useState({})
@@ -48,6 +187,8 @@ export default function SourcesPage() {
           Change the URLs scrapers use. Changes take effect on the next scrape run (no restart needed).
         </p>
       </div>
+
+      <BanCheckPanel />
 
       {error && (
         <div style={{ background: 'rgba(255,68,68,0.1)', border: '1px solid rgba(255,68,68,0.3)', borderRadius: 8, padding: '12px 16px', color: '#ff6b6b', marginBottom: 20, fontSize: 13 }}>
