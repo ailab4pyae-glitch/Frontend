@@ -17,7 +17,7 @@ export default function WatchPage() {
   useEffect(() => () => killActiveStream(), [])
 
   const { data: match }   = useSWR(apiUrl.match(id),   fetcher)
-  const { data: streams } = useSWR(apiUrl.streams(id), fetcher, { refreshInterval: 60000 })
+  const { data: streams } = useSWR(apiUrl.streams(id), fetcher, { refreshInterval: 30000, keepPreviousData: true })
 
   // SD first — default (index 0) plays SD for low-bandwidth users, HD available to switch manually
   const allUrls = useMemo(() => [
