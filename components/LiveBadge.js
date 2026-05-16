@@ -5,8 +5,8 @@ export default function LiveBadge({ status, scheduledAt }) {
     return (
       <span style={{
         display: 'inline-flex', alignItems: 'center', gap: 5,
-        background: 'rgba(255,68,68,0.15)', border: '1px solid rgba(255,68,68,0.3)',
-        color: '#ff4444', fontSize: 11, fontWeight: 700,
+        background: 'rgba(0,255,135,0.12)', border: '1px solid rgba(0,255,135,0.3)',
+        color: '#00FF87', fontSize: 11, fontWeight: 700,
         padding: '3px 8px', borderRadius: 20, letterSpacing: '.5px',
       }}>
         <span className="live-dot" /> LIVE

@@ -1,7 +1,9 @@
 'use client'
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from 'react'
+import { activeStream, killActiveStream } from '@/lib/player'
 
 const isFlv = (url) => /\.flv(\?|$)/i.test(url)
+const SWITCH_DELAY = 30
 
 const getNetworkTier = () => {
   if (typeof navigator === 'undefined') return 'medium'
@@ -19,15 +21,19 @@ const RotateIcon = () => (
   </svg>
 )
 
-export default function VideoPlayer({ url, isLive = false, onError, allExhausted = false }) {
+const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onError, allExhausted = false }, ref) {
+  const containerRef   = useRef(null)
   const videoRef       = useRef(null)
   const hlsRef         = useRef(null)
   const flvRef         = useRef(null)
   const plyrRef        = useRef(null)
   const timersRef      = useRef([])
   const loadTimeoutRef = useRef(null)
-  const [loading, setLoading] = useState(true)
-  const [error,   setError]   = useState(false)
+  const countdownRef   = useRef(null)
+  const mountedRef     = useRef(true)  // false once Plyr cleanup runs (unmounting)
+  const [loading,   setLoading]   = useState(true)
+  const [error,     setError]     = useState(false)
+  const [countdown, setCountdown] = useState(null) // null = none, number = switching in Ns
 
   const handleRotate = useCallback(async () => {
     const el = videoRef.current
@@ -38,36 +44,67 @@ export default function VideoPlayer({ url, isLive = false, onError, allExhausted
     } catch (_) {}
   }, [])
 
+  const clearCountdown = useCallback(() => {
+    if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null }
+    setCountdown(null)
+  }, [])
+
   const clearTimers = useCallback(() => {
     timersRef.current.forEach(clearInterval)
     timersRef.current = []
     if (loadTimeoutRef.current) { clearTimeout(loadTimeoutRef.current); loadTimeoutRef.current = null }
   }, [])
 
-  const handleError = useCallback(() => {
+  // Final action: move to next server or show error
+  const switchServer = useCallback(() => {
+    clearCountdown()
     clearTimers()
     if (onError && !allExhausted) {
-      // more servers available — switch silently, keep spinner visible
       setLoading(true)
       setError(false)
       onError()
     } else {
-      // last server exhausted — show error screen
       setError(true)
       setLoading(false)
     }
-  }, [onError, allExhausted, clearTimers])
+  }, [onError, allExhausted, clearTimers, clearCountdown])
+
+  // Immediate switch for stalls/timeouts (already delayed by detector)
+  const handleError = useCallback(() => {
+    switchServer()
+  }, [switchServer])
+
+  // Fatal error from HLS/FLV: show 30s countdown, let slow connections recover
+  const handleFatalError = useCallback(() => {
+    if (countdownRef.current) return // countdown already running
+    if (allExhausted) { switchServer(); return }
+    clearTimers()
+    setLoading(false)
+    let remaining = SWITCH_DELAY
+    setCountdown(remaining)
+    countdownRef.current = setInterval(() => {
+      remaining -= 1
+      if (remaining <= 0) {
+        switchServer()
+      } else {
+        setCountdown(remaining)
+      }
+    }, 1000)
+  }, [allExhausted, switchServer, clearTimers])
 
   const destroyStream = useCallback(() => {
+    clearCountdown()
     clearTimers()
+    const video = videoRef.current
+    if (video) { try { video.pause(); video.src = '' } catch (_) {} }
     if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null }
     if (flvRef.current) {
       try { flvRef.current.unload(); flvRef.current.detachMediaElement(); flvRef.current.destroy() } catch (_) {}
       flvRef.current = null
     }
-  }, [clearTimers])
+  }, [clearTimers, clearCountdown])
 
-  // Stall detector — if currentTime doesn't move for 8 × 5s = 40s → error
+  // Stall detector — if currentTime doesn't move for 8 × 5s = 40s → switch
   const startStallDetector = useCallback((video) => {
     let lastTime = -1, stallCount = 0
     const id = setInterval(() => {
@@ -92,11 +129,37 @@ export default function VideoPlayer({ url, isLive = false, onError, allExhausted
     timersRef.current.push(id)
   }, [])
 
-  // Plyr — initialise once on mount, destroy on unmount
+  // Full teardown — called on navigation (popstate) and exposed for parent pages
+  const stopAll = useCallback(() => {
+    killActiveStream()
+    hlsRef.current = null
+    flvRef.current = null
+    timersRef.current.forEach(clearInterval); timersRef.current = []
+    if (loadTimeoutRef.current) { clearTimeout(loadTimeoutRef.current); loadTimeoutRef.current = null }
+    if (countdownRef.current)   { clearInterval(countdownRef.current);  countdownRef.current = null }
+  }, [])
+
+  // Expose stop() so parent pages can halt playback before navigating
+  useImperativeHandle(ref, () => ({ stop: stopAll }), [stopAll])
+
+  // Stop the instant back/forward navigation starts — fires before React unmount
   useEffect(() => {
-    if (!videoRef.current) return
+    window.addEventListener('popstate', stopAll)
+    return () => window.removeEventListener('popstate', stopAll)
+  }, [stopAll])
+
+  // Plyr — create video element imperatively so Plyr's DOM wrapping never conflicts
+  // with React's reconciler. React only tracks the outer container div.
+  useEffect(() => {
+    if (!containerRef.current) return
     let cancelled = false
     let plyr = null
+
+    const video = document.createElement('video')
+    video.playsInline = true
+    video.style.cssText = 'width:100%;height:100%;object-fit:contain'
+    containerRef.current.appendChild(video)
+    videoRef.current = video
 
     ;(async () => {
       const Plyr = (await import('plyr')).default
@@ -113,16 +176,39 @@ export default function VideoPlayer({ url, isLive = false, onError, allExhausted
     })()
 
     return () => {
+      mountedRef.current = false
       cancelled = true
-      if (plyr) { try { plyr.destroy() } catch (_) {} }
+
+      // 1. Kill global singleton (stops audio immediately, no matter what)
+      killActiveStream()
+      hlsRef.current = null
+      flvRef.current = null
+
+      // 2. Clear all timers
+      timersRef.current.forEach(clearInterval); timersRef.current = []
+      if (loadTimeoutRef.current) { clearTimeout(loadTimeoutRef.current); loadTimeoutRef.current = null }
+      if (countdownRef.current)   { clearInterval(countdownRef.current);  countdownRef.current = null }
+
+      // 3. Destroy Plyr last
+      const p = plyrRef.current || plyr
+      if (p) { try { p.destroy() } catch (_) {} }
       plyrRef.current = null
+
+      // 4. Remove video element from DOM
+      const v = videoRef.current
+      videoRef.current = null
+      if (v?.parentNode) { try { v.parentNode.removeChild(v) } catch (_) {} }
     }
-  }, []) // once per mount (component is keyed by url in watch page)
+  }, [])
 
   // Stream loading
   useEffect(() => {
     if (!url || !videoRef.current) return
     const video = videoRef.current
+    let stopped = false  // guards async callbacks after cleanup has run
+
+    killActiveStream()
+    activeStream.video = video
     setLoading(true)
     setError(false)
     destroyStream()
@@ -131,7 +217,7 @@ export default function VideoPlayer({ url, isLive = false, onError, allExhausted
     let ready = false
 
     const onReady = () => {
-      if (ready) return
+      if (stopped || ready) return
       ready = true
       if (loadTimeoutRef.current) { clearTimeout(loadTimeoutRef.current); loadTimeoutRef.current = null }
       setLoading(false)
@@ -140,12 +226,12 @@ export default function VideoPlayer({ url, isLive = false, onError, allExhausted
       if (isLive) startLiveCatchup(video)
     }
 
-    loadTimeoutRef.current = setTimeout(() => { if (!ready) handleError() }, 40000)
+    loadTimeoutRef.current = setTimeout(() => { if (!ready) handleError() }, 30000)
 
     if (isFlv(url)) {
       ;(async () => {
         const flvjs = (await import('flv.js')).default
-        if (!flvjs.isSupported()) { handleError(); return }
+        if (stopped || !flvjs.isSupported()) { handleError(); return }
         const player = flvjs.createPlayer(
           { type: 'flv', url, isLive, cors: true, withCredentials: false },
           {
@@ -156,15 +242,18 @@ export default function VideoPlayer({ url, isLive = false, onError, allExhausted
             deferLoadAfterSourceOpen: false,
           }
         )
+        if (stopped) { try { player.destroy() } catch (_) {}; return }
         flvRef.current = player
+        activeStream.flv = player
         player.attachMediaElement(video)
         player.load()
-        player.on(flvjs.Events.ERROR, () => handleError())
+        player.on(flvjs.Events.ERROR, () => handleFatalError())
         player.on(flvjs.Events.MEDIA_INFO, () => onReady())
       })()
     } else {
       ;(async () => {
         const Hls = (await import('hls.js')).default
+        if (stopped) return
         if (Hls.isSupported()) {
           const cfg = isLive
             ? {
@@ -194,11 +283,13 @@ export default function VideoPlayer({ url, isLive = false, onError, allExhausted
               }
 
           const hls = new Hls(cfg)
+          if (stopped) { try { hls.destroy() } catch (_) {}; return }
           hlsRef.current = hls
+          activeStream.hls = hls
           hls.loadSource(url)
           hls.attachMedia(video)
           hls.on(Hls.Events.MANIFEST_PARSED, () => onReady())
-          hls.on(Hls.Events.ERROR, (_, data) => { if (data.fatal) handleError() })
+          hls.on(Hls.Events.ERROR, (_, data) => { if (data.fatal) handleFatalError() })
         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
           video.src = url
           video.addEventListener('loadedmetadata', function onMeta() {
@@ -212,19 +303,19 @@ export default function VideoPlayer({ url, isLive = false, onError, allExhausted
       })()
     }
 
-    return () => destroyStream()
-  }, [url, isLive, handleError, destroyStream, startStallDetector, startLiveCatchup])
+    return () => {
+      stopped = true          // prevent any in-flight async callback from attaching
+      killActiveStream()      // kill immediately — works even if HLS hadn't registered yet
+      if (mountedRef.current) destroyStream()
+    }
+  }, [url, isLive, handleError, handleFatalError, destroyStream, startStallDetector, startLiveCatchup])
 
   return (
     <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', background: '#000', borderRadius: 12, overflow: 'hidden' }}>
-      <video
-        ref={videoRef}
-        playsInline
-        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-      />
+      <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
 
-      {/* Rotate button — sits above Plyr controls bar (~44px) */}
-      {!loading && !error && (
+      {/* Rotate button — sits above Plyr controls */}
+      {!loading && !error && countdown === null && (
         <button
           onClick={handleRotate}
           style={{
@@ -240,6 +331,7 @@ export default function VideoPlayer({ url, isLive = false, onError, allExhausted
         </button>
       )}
 
+      {/* Loading spinner */}
       {loading && !error && (
         <div style={{
           position: 'absolute', inset: 0, zIndex: 30,
@@ -251,26 +343,72 @@ export default function VideoPlayer({ url, isLive = false, onError, allExhausted
         </div>
       )}
 
+      {/* Countdown overlay — server failed, giving slow connections time to recover */}
+      {countdown !== null && !error && (
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 30,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          gap: 12, background: 'rgba(10,14,26,0.92)', padding: 24, textAlign: 'center',
+        }}>
+          <div style={{
+            width: 64, height: 64, borderRadius: '50%',
+            border: '3px solid rgba(245,158,11,0.25)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <span style={{ fontSize: 24, fontWeight: 900, color: '#f59e0b', lineHeight: 1 }}>
+              {countdown}
+            </span>
+          </div>
+          <p style={{ fontSize: 14, fontWeight: 600, color: 'rgba(255,255,255,0.7)', margin: 0 }}>
+            Server failed
+          </p>
+          <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', margin: 0 }}>
+            Switching to next server automatically…
+          </p>
+          <button
+            onClick={switchServer}
+            style={{
+              marginTop: 4, background: 'rgba(0,255,135,0.12)',
+              border: '1px solid rgba(0,255,135,0.3)', color: '#00FF87',
+              borderRadius: 20, padding: '8px 22px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+            }}
+          >
+            Switch Now
+          </button>
+        </div>
+      )}
+
+      {/* Error screen — all servers exhausted */}
       {error && (
         <div style={{
           position: 'absolute', inset: 0, zIndex: 30,
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          gap: 14, background: '#0a0e1a', padding: 24, textAlign: 'center',
+          gap: 12, background: '#0a0e1a', padding: 24, textAlign: 'center',
         }}>
-          <div style={{ fontSize: 40 }}>📡</div>
-          <p style={{ fontSize: 15, fontWeight: 600, color: 'rgba(255,255,255,0.8)' }}>Stream unavailable</p>
-          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>Try another server below</p>
+          <div style={{ fontSize: 38 }}>📡</div>
+          <p style={{ fontSize: 15, fontWeight: 700, color: 'rgba(255,255,255,0.85)', margin: 0 }}>
+            All servers failed
+          </p>
+          <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', margin: 0, lineHeight: 1.7, maxWidth: 260 }}>
+            Live streams can drop between coverage windows.<br />
+            Wait 1–2 minutes and try again — servers usually recover on their own.
+          </p>
           {onError && (
-            <button onClick={onError} style={{
-              marginTop: 4, background: 'rgba(0,255,135,0.12)',
-              border: '1px solid rgba(0,255,135,0.3)', color: '#00FF87',
-              borderRadius: 20, padding: '8px 20px', fontSize: 13, fontWeight: 700,
-            }}>
-              Try Next Server
+            <button
+              onClick={onError}
+              style={{
+                marginTop: 6, background: 'rgba(0,255,135,0.12)',
+                border: '1px solid rgba(0,255,135,0.3)', color: '#00FF87',
+                borderRadius: 20, padding: '8px 22px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+              }}
+            >
+              Retry
             </button>
           )}
         </div>
       )}
     </div>
   )
-}
+})
+
+export default VideoPlayer

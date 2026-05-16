@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { adminFetch } from '@/lib/auth'
 
 const inp = (extra = {}) => ({
@@ -221,10 +221,44 @@ export default function SourcesPage() {
   )
 }
 
+function useScraperRun(slug) {
+  const [running,   setRunning]   = useState(false)
+  const [lastRunAt, setLastRunAt] = useState(null)
+  const pollRef = useRef(null)
+
+  const stopPoll = () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null } }
+
+  const poll = async () => {
+    try {
+      const data = await adminFetch(`/api/admin/scrapers/${slug}/status`)
+      setLastRunAt(data.last_run_at)
+      if (!data.running) { setRunning(false); stopPoll() }
+    } catch (_) {}
+  }
+
+  const trigger = async () => {
+    if (running) return
+    setRunning(true)
+    try {
+      await adminFetch(`/api/admin/scrapers/${slug}/run`, { method: 'POST' })
+      stopPoll()
+      pollRef.current = setInterval(poll, 3000)
+    } catch (e) {
+      setRunning(false)
+      alert(e.message)
+    }
+  }
+
+  useEffect(() => () => stopPoll(), [])
+
+  return { running, lastRunAt, trigger }
+}
+
 function SourceCard({ src, saving, saved, onSave }) {
   // Keep a local editable copy of the config
   const [config, setConfig] = useState(() => ({ ...src.config }))
   const [active, setActive] = useState(src.is_active)
+  const { running, lastRunAt, trigger } = useScraperRun(src.slug)
 
   // For sources with base_urls array (socolive)
   const isMultiUrl = Array.isArray(config.base_urls)
@@ -375,8 +409,8 @@ function SourceCard({ src, saving, saved, onSave }) {
         )}
       </div>
 
-      {/* Save button */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 18 }}>
+      {/* Save + Run Now */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 18, flexWrap: 'wrap' }}>
         <button
           onClick={() => onSave({ is_active: active, config })}
           disabled={saving}
@@ -390,9 +424,34 @@ function SourceCard({ src, saving, saved, onSave }) {
         >
           {saving ? 'Saving…' : saved ? '✓ Saved' : 'Save Changes'}
         </button>
-        {saved && (
+
+        {/* Only show Run Now for known scrapers */}
+        {(src.slug === 'chinalive' || src.slug === 'socolive') && (
+          <button
+            onClick={trigger}
+            disabled={running}
+            style={{
+              border: `1px solid ${running ? 'rgba(96,165,250,0.3)' : 'rgba(96,165,250,0.5)'}`,
+              borderRadius: 8, padding: '9px 20px',
+              background: running ? 'rgba(96,165,250,0.08)' : 'rgba(96,165,250,0.12)',
+              color: running ? 'rgba(96,165,250,0.5)' : '#60a5fa',
+              fontWeight: 700, fontSize: 14,
+              cursor: running ? 'not-allowed' : 'pointer',
+              transition: 'all .2s',
+            }}
+          >
+            {running ? '⏳ Running…' : '▶ Run Now'}
+          </button>
+        )}
+
+        {lastRunAt && !running && (
           <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12 }}>
-            Takes effect on the next scrape run
+            Last run: {new Date(lastRunAt).toLocaleTimeString()}
+          </span>
+        )}
+        {running && (
+          <span style={{ color: '#60a5fa', fontSize: 12 }}>
+            Scraper is running — checking every 3s…
           </span>
         )}
       </div>

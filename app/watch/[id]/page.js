@@ -3,14 +3,18 @@ import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import useSWR from 'swr'
 import { fetcher, apiUrl, formatDate, formatTime } from '@/lib/api'
+import { killActiveStream } from '@/lib/player'
 import LiveBadge from '@/components/LiveBadge'
 import VideoPlayer from '@/components/VideoPlayer'
 import ServerSelector from '@/components/ServerSelector'
 import TeamLogo from '@/components/TeamLogo'
+import AdBanner from '@/components/AdBanner'
 
 export default function WatchPage() {
-  const { id }  = useParams()
-  const router  = useRouter()
+  const { id }     = useParams()
+  const router     = useRouter()
+  // Stop stream whenever this page is left — no ref needed, hits the global singleton
+  useEffect(() => () => killActiveStream(), [])
 
   const { data: match }   = useSWR(apiUrl.match(id),   fetcher)
   const { data: streams } = useSWR(apiUrl.streams(id), fetcher, { refreshInterval: 60000 })
@@ -72,8 +76,8 @@ export default function WatchPage() {
         display: 'flex', alignItems: 'center', gap: 12,
       }}>
         <button
-          onClick={() => router.back()}
-          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.7)', padding: 4 }}
+          onClick={() => { killActiveStream(); router.back() }}
+          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.7)', padding: 4, cursor: 'pointer' }}
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
             <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
@@ -104,16 +108,6 @@ export default function WatchPage() {
                 <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', margin: 0, lineHeight: 1.6 }}>
                   Stream will appear at kickoff
                 </p>
-                {match?.source_name === 'socolive' || match?.tab_id && (
-                  <div style={{
-                    marginTop: 6, padding: '8px 14px', borderRadius: 8,
-                    background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)',
-                    fontSize: 11, color: '#f59e0b', lineHeight: 1.6, maxWidth: 280,
-                  }}>
-                    ⚠️ SOCO streams require Asian IP.<br />
-                    US/EU VPN will block CDN access.
-                  </div>
-                )}
               </div>
             )
           }
@@ -190,6 +184,7 @@ export default function WatchPage() {
             )}
           </div>
         )}
+        <AdBanner page="watch" slot="watch_below_player" style={{ padding: '12px 16px 0' }} />
       </div>
     </div>
   )

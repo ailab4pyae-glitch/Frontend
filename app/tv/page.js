@@ -1,133 +1,150 @@
 'use client'
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import useSWR from 'swr'
 import Header from '@/components/Header'
 import BottomNav from '@/components/BottomNav'
-import VideoPlayer from '@/components/VideoPlayer'
+import { fetcher, apiUrl } from '@/lib/api'
 
-const CHANNELS = [
-  {
-    section: 'Myanmar TV',
-    items: [
-      { id: 'mrtv',     name: 'MRTV',        emoji: '📺', color: '#e63946', url: null },
-      { id: 'mrtv4',    name: 'MRTV-4',       emoji: '🎬', color: '#457b9d', url: null },
-      { id: 'myawady',  name: 'Myawady TV',   emoji: '🌟', color: '#2a9d8f', url: null },
-      { id: 'channel7', name: 'Channel 7',    emoji: '7️⃣', color: '#e76f51', url: null },
-    ],
-  },
-  {
-    section: 'Sports TV',
-    items: [
-      { id: 'espn',     name: 'ESPN',         emoji: '🏆', color: '#e63946', url: null },
-      { id: 'bein1',    name: 'beIN Sports 1', emoji: '⚽', color: '#06aed5', url: null },
-      { id: 'bein2',    name: 'beIN Sports 2', emoji: '⚽', color: '#06aed5', url: null },
-      { id: 'skysport', name: 'Sky Sports',   emoji: '🔵', color: '#0077b6', url: null },
-      { id: 'dazn',     name: 'DAZN',         emoji: '🎯', color: '#f72585', url: null },
-      { id: 'paramount', name: 'Paramount+',  emoji: '⭐', color: '#0054a3', url: null },
-    ],
-  },
-  {
-    section: 'News TV',
-    items: [
-      { id: 'cnn',      name: 'CNN',          emoji: '🌍', color: '#cc0000', url: null },
-      { id: 'bbc',      name: 'BBC News',     emoji: '🎙', color: '#bb1919', url: null },
-      { id: 'aljazeera', name: 'Al Jazeera',  emoji: '📡', color: '#00843d', url: null },
-      { id: 'bloomberg', name: 'Bloomberg',   emoji: '📊', color: '#f4a000', url: null },
-    ],
-  },
-]
+function ChannelCard({ ch, onSelect }) {
+  const hasStream = !!ch.stream_url
+  return (
+    <button
+      onClick={() => hasStream && onSelect(ch)}
+      style={{
+        background: '#141824',
+        border: '1px solid rgba(255,255,255,0.07)',
+        borderRadius: 14, padding: '14px 10px',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+        cursor: hasStream ? 'pointer' : 'default',
+        transition: 'all .15s',
+        opacity: hasStream ? 1 : 0.45,
+        textAlign: 'center', position: 'relative',
+      }}
+      onMouseEnter={(e) => hasStream && (e.currentTarget.style.borderColor = ch.color + '80')}
+      onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.07)')}
+    >
+      {/* Live dot */}
+      {hasStream && (
+        <span style={{
+          position: 'absolute', top: 8, right: 8,
+          width: 7, height: 7, borderRadius: '50%',
+          background: '#00FF87',
+          boxShadow: '0 0 6px #00FF87',
+          animation: 'livePulse 1.4s ease-in-out infinite',
+        }} />
+      )}
 
-const ChannelCard = ({ channel, onSelect }) => (
-  <button
-    onClick={() => channel.url ? onSelect(channel) : null}
-    style={{
-      background: '#141824',
-      border: '1px solid rgba(255,255,255,0.07)',
-      borderRadius: 12, padding: '16px 12px',
-      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
-      cursor: channel.url ? 'pointer' : 'default',
-      transition: 'border-color .15s',
-      opacity: channel.url ? 1 : 0.5,
-      textAlign: 'center',
-    }}
-    onMouseEnter={(e) => channel.url && (e.currentTarget.style.borderColor = 'rgba(0,255,135,0.25)')}
-    onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.07)')}
-  >
-    <div style={{
-      width: 52, height: 52, borderRadius: 12,
-      background: channel.color + '22',
-      border: `1px solid ${channel.color}44`,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: 24,
-    }}>
-      {channel.emoji}
+      {/* Logo or emoji */}
+      <div style={{
+        width: 54, height: 54, borderRadius: 14,
+        background: ch.color + '20',
+        border: `1px solid ${ch.color}40`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        overflow: 'hidden',
+      }}>
+        {ch.logo_url
+          ? <img src={ch.logo_url} alt={ch.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          : <span style={{ fontSize: 26 }}>{ch.emoji}</span>
+        }
+      </div>
+
+      <span style={{
+        fontSize: 11, fontWeight: 700,
+        color: 'rgba(255,255,255,0.75)',
+        lineHeight: 1.3, maxWidth: '100%',
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+      }}>
+        {ch.name}
+      </span>
+
+      {!hasStream && (
+        <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', fontWeight: 600 }}>Coming soon</span>
+      )}
+    </button>
+  )
+}
+
+function SectionLabel({ children }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '20px 0 10px' }}>
+      <span style={{ fontSize: 11, fontWeight: 800, color: 'rgba(255,255,255,0.4)', letterSpacing: 1, textTransform: 'uppercase' }}>
+        {children}
+      </span>
+      <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
     </div>
-    <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.8)', lineHeight: 1.3 }}>
-      {channel.name}
-    </span>
-    {!channel.url && (
-      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)' }}>Coming soon</span>
-    )}
-  </button>
-)
+  )
+}
 
 export default function TVPage() {
-  const [modal, setModal] = useState(null) // { name, url }
+  const router = useRouter()
+  const [tab, setTab] = useState('tv')
+
+  const { data: tvGroups,    isLoading: tvLoading }    = useSWR(apiUrl.tv('tv'),    fetcher, { revalidateOnFocus: false })
+  const { data: radioGroups, isLoading: radioLoading } = useSWR(apiUrl.tv('radio'), fetcher, { revalidateOnFocus: false })
+
+  const groups  = tab === 'tv' ? (tvGroups || []) : (radioGroups || [])
+  const loading = tab === 'tv' ? tvLoading : radioLoading
+
+  const selectChannel = (ch) => router.push(`/tv/${ch.id}`)
 
   return (
     <div style={{ minHeight: '100vh', background: '#0A0E1A' }}>
       <Header />
 
-      <main style={{ padding: '16px 16px 80px' }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>TV Channels</h1>
-        <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', marginBottom: 20 }}>
-          Live channels — add streams from admin panel
-        </p>
+      <main style={{ padding: '0 0 80px' }}>
+        {/* Tab strip */}
+        <div style={{
+          display: 'flex', gap: 0,
+          borderBottom: '1px solid rgba(255,255,255,0.07)',
+          padding: '0 16px',
+        }}>
+          {[['tv','📺 TV'], ['radio','📻 Radio']].map(([key, label]) => (
+            <button key={key} onClick={() => setTab(key)} style={{
+              background: 'none', border: 'none',
+              borderBottom: `2px solid ${tab === key ? '#00FF87' : 'transparent'}`,
+              color: tab === key ? '#00FF87' : 'rgba(255,255,255,0.45)',
+              fontWeight: 700, fontSize: 14, padding: '14px 20px',
+              cursor: 'pointer', transition: 'all .15s',
+            }}>
+              {label}
+            </button>
+          ))}
+        </div>
 
-        {CHANNELS.map(({ section, items }) => (
-          <div key={section} style={{ marginBottom: 28 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.4)', letterSpacing: 1, textTransform: 'uppercase' }}>
-                {section}
-              </span>
-              <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-              {items.map((ch) => (
-                <ChannelCard key={ch.id} channel={ch} onSelect={setModal} />
+        {/* Channel grid */}
+        <div style={{ padding: '0 16px' }}>
+          {loading && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, paddingTop: 20 }}>
+              {[...Array(9)].map((_, i) => (
+                <div key={i} className="skeleton" style={{ height: 110, borderRadius: 14 }} />
               ))}
             </div>
-          </div>
-        ))}
-      </main>
+          )}
 
-      {/* Player Modal */}
-      {modal && (
-        <div
-          onClick={() => setModal(null)}
-          style={{
-            position: 'fixed', inset: 0, zIndex: 300,
-            background: 'rgba(0,0,0,0.85)',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            padding: 16,
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{ width: '100%', maxWidth: 640, display: 'flex', flexDirection: 'column', gap: 12 }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontWeight: 700, fontSize: 16 }}>{modal.name}</span>
-              <button
-                onClick={() => setModal(null)}
-                style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 20, padding: '6px 12px', color: '#fff', fontSize: 13 }}
-              >
-                ✕ Close
-              </button>
+          {!loading && groups.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '60px 0', color: 'rgba(255,255,255,0.3)', fontSize: 14 }}>
+              No {tab === 'tv' ? 'TV' : 'radio'} channels yet.<br />
+              <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.2)' }}>Add them from Admin → TV & Radio</span>
             </div>
-            <VideoPlayer url={modal.url} isLive onError={() => setModal(null)} />
-          </div>
+          )}
+
+          {groups.map(({ category, channels }) => (
+            <div key={category}>
+              <SectionLabel>{category}</SectionLabel>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
+                {channels.map((ch) => (
+                  <ChannelCard
+                    key={ch.id}
+                    ch={ch}
+                    onSelect={selectChannel}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
-      )}
+      </main>
 
       <BottomNav />
     </div>

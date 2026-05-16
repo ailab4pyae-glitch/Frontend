@@ -47,9 +47,21 @@ const Toggle = ({ label, checked, onChange, description }) => (
   </div>
 )
 
+const DEFAULT_ADS = {
+  master_enabled: false,
+  pages: { home: true, watch: true },
+  networks: {
+    adsense:      { enabled: false, publisher_id: '', auto_ads: true, slots: { home_top: '', home_bottom: '', watch_below: '' } },
+    propellerads: { enabled: false, popunder_zone: '', push_zone: '' },
+    adsterra:     { enabled: false, banner_key: '', social_bar_key: '' },
+    monetag:      { enabled: false, zone_id: '' },
+  },
+}
+
 export default function ConfigPage() {
   const [features, setFeatures] = useState(null)
   const [ui, setUi]             = useState(null)
+  const [ads, setAds]           = useState(null)
   const [tabs, setTabs]         = useState([])
   const [saving, setSaving]     = useState({})
   const [saved, setSaved]       = useState({})
@@ -62,6 +74,17 @@ export default function ConfigPage() {
     ]).then(([cfg, tabData]) => {
       setFeatures({ ...(cfg?.features?.value || {}) })
       setUi({ ...(cfg?.ui?.value || {}) })
+      const savedAds = cfg?.ads?.value || {}
+      setAds({
+        master_enabled: savedAds.master_enabled ?? DEFAULT_ADS.master_enabled,
+        pages:    { ...DEFAULT_ADS.pages,    ...(savedAds.pages    || {}) },
+        networks: {
+          adsense:      { ...DEFAULT_ADS.networks.adsense,      ...(savedAds.networks?.adsense      || {}), slots: { ...DEFAULT_ADS.networks.adsense.slots,      ...(savedAds.networks?.adsense?.slots      || {}) } },
+          propellerads: { ...DEFAULT_ADS.networks.propellerads, ...(savedAds.networks?.propellerads || {}) },
+          adsterra:     { ...DEFAULT_ADS.networks.adsterra,     ...(savedAds.networks?.adsterra     || {}) },
+          monetag:      { ...DEFAULT_ADS.networks.monetag,      ...(savedAds.networks?.monetag      || {}) },
+        },
+      })
       setTabs(tabData || [])
     }).catch((e) => setError(e.message))
   }, [])
@@ -175,6 +198,176 @@ export default function ConfigPage() {
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <SaveBtn k="ui" />
+            </div>
+          </>
+        }
+      </Section>
+
+      {/* Ads Management */}
+      <Section title="Ads Management">
+        {ads === null
+          ? <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>Loading…</div>
+          : <>
+            {/* Master switch */}
+            <Toggle
+              label="Master Ads Switch"
+              description="Turn OFF to hide all ads sitewide instantly"
+              checked={!!ads.master_enabled}
+              onChange={(v) => setAds((a) => ({ ...a, master_enabled: v }))}
+            />
+
+            {/* Pages */}
+            <div style={{ margin: '16px 0 8px' }}>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 8 }}>Show Ads On</div>
+              <div style={{ display: 'flex', gap: 16 }}>
+                {[{ key: 'home', label: 'Home page' }, { key: 'watch', label: 'Watch page' }].map(({ key, label }) => (
+                  <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={!!ads.pages?.[key]}
+                      onChange={(e) => setAds((a) => ({ ...a, pages: { ...a.pages, [key]: e.target.checked } }))}
+                      style={{ width: 16, height: 16, accentColor: '#00FF87', cursor: 'pointer' }}
+                    />
+                    <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14 }}>{label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '16px 0' }} />
+
+            {/* Google AdSense */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 16 }}>🔵</span>
+                  <span style={{ color: '#fff', fontWeight: 700 }}>Google AdSense</span>
+                  <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>Highest CPM</span>
+                </div>
+                <Toggle label="" checked={!!ads.networks?.adsense?.enabled}
+                  onChange={(v) => setAds((a) => ({ ...a, networks: { ...a.networks, adsense: { ...a.networks.adsense, enabled: v } } }))}
+                />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingLeft: 24 }}>
+                {[
+                  { key: 'publisher_id', label: 'Publisher ID', ph: 'ca-pub-XXXXXXXXXXXXXXXX' },
+                ].map(({ key, label, ph }) => (
+                  <div key={key}>
+                    <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>{label}</label>
+                    <input type="text" placeholder={ph} value={ads.networks?.adsense?.[key] || ''}
+                      onChange={(e) => setAds((a) => ({ ...a, networks: { ...a.networks, adsense: { ...a.networks.adsense, [key]: e.target.value } } }))}
+                      style={input({ fontFamily: 'monospace', fontSize: 12 })}
+                    />
+                  </div>
+                ))}
+                <Toggle label="Auto Ads (recommended)" description="Google places ads automatically — no slot IDs needed"
+                  checked={!!ads.networks?.adsense?.auto_ads}
+                  onChange={(v) => setAds((a) => ({ ...a, networks: { ...a.networks, adsense: { ...a.networks.adsense, auto_ads: v } } }))}
+                />
+                {!ads.networks?.adsense?.auto_ads && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
+                    {[
+                      { key: 'home_top',    label: 'Home top slot ID' },
+                      { key: 'home_bottom', label: 'Home bottom slot ID' },
+                      { key: 'watch_below', label: 'Watch page slot ID' },
+                    ].map(({ key, label }) => (
+                      <div key={key}>
+                        <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', display: 'block', marginBottom: 3 }}>{label}</label>
+                        <input type="text" placeholder="1234567890" value={ads.networks?.adsense?.slots?.[key] || ''}
+                          onChange={(e) => setAds((a) => ({ ...a, networks: { ...a.networks, adsense: { ...a.networks.adsense, slots: { ...a.networks.adsense.slots, [key]: e.target.value } } } }))}
+                          style={input({ fontFamily: 'monospace', fontSize: 12 })}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* PropellerAds */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 16 }}>🟠</span>
+                  <span style={{ color: '#fff', fontWeight: 700 }}>PropellerAds</span>
+                  <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>Best for streaming</span>
+                </div>
+                <Toggle label="" checked={!!ads.networks?.propellerads?.enabled}
+                  onChange={(v) => setAds((a) => ({ ...a, networks: { ...a.networks, propellerads: { ...a.networks.propellerads, enabled: v } } }))}
+                />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingLeft: 24 }}>
+                {[
+                  { key: 'popunder_zone', label: 'Onclick (Popunder) Zone ID', ph: 'Zone ID from PropellerAds' },
+                  { key: 'push_zone',     label: 'Push Notification Zone ID',  ph: 'Zone ID from PropellerAds' },
+                ].map(({ key, label, ph }) => (
+                  <div key={key}>
+                    <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>{label}</label>
+                    <input type="text" placeholder={ph} value={ads.networks?.propellerads?.[key] || ''}
+                      onChange={(e) => setAds((a) => ({ ...a, networks: { ...a.networks, propellerads: { ...a.networks.propellerads, [key]: e.target.value } } }))}
+                      style={input({ fontFamily: 'monospace', fontSize: 12 })}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Adsterra */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 16 }}>🟢</span>
+                  <span style={{ color: '#fff', fontWeight: 700 }}>Adsterra</span>
+                  <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>Good SEA CPM</span>
+                </div>
+                <Toggle label="" checked={!!ads.networks?.adsterra?.enabled}
+                  onChange={(v) => setAds((a) => ({ ...a, networks: { ...a.networks, adsterra: { ...a.networks.adsterra, enabled: v } } }))}
+                />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingLeft: 24 }}>
+                {[
+                  { key: 'banner_key',      label: 'Banner Key',      ph: 'Adsterra banner key' },
+                  { key: 'social_bar_key',  label: 'Social Bar Key',  ph: 'Adsterra social bar key' },
+                ].map(({ key, label, ph }) => (
+                  <div key={key}>
+                    <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>{label}</label>
+                    <input type="text" placeholder={ph} value={ads.networks?.adsterra?.[key] || ''}
+                      onChange={(e) => setAds((a) => ({ ...a, networks: { ...a.networks, adsterra: { ...a.networks.adsterra, [key]: e.target.value } } }))}
+                      style={input({ fontFamily: 'monospace', fontSize: 12 })}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Monetag */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 16 }}>🟣</span>
+                  <span style={{ color: '#fff', fontWeight: 700 }}>Monetag</span>
+                  <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>In-page push</span>
+                </div>
+                <Toggle label="" checked={!!ads.networks?.monetag?.enabled}
+                  onChange={(v) => setAds((a) => ({ ...a, networks: { ...a.networks, monetag: { ...a.networks.monetag, enabled: v } } }))}
+                />
+              </div>
+              <div style={{ paddingLeft: 24 }}>
+                <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 4 }}>Zone ID</label>
+                <input type="text" placeholder="Monetag zone ID" value={ads.networks?.monetag?.zone_id || ''}
+                  onChange={(e) => setAds((a) => ({ ...a, networks: { ...a.networks, monetag: { ...a.networks.monetag, zone_id: e.target.value } } }))}
+                  style={input({ fontFamily: 'monospace', fontSize: 12 })}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button onClick={() => saveKey('ads', ads)} disabled={saving.ads} style={{
+                border: 'none', borderRadius: 8, padding: '10px 24px',
+                background: saved.ads ? 'rgba(0,255,135,0.2)' : '#00FF87',
+                color: saved.ads ? '#00FF87' : '#0A0E1A',
+                fontWeight: 700, fontSize: 13, cursor: 'pointer',
+              }}>
+                {saving.ads ? 'Saving…' : saved.ads ? '✓ Saved' : 'Save Ads Config'}
+              </button>
             </div>
           </>
         }

@@ -1,6 +1,55 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import { adminFetch } from '@/lib/auth'
+import dynamic from 'next/dynamic'
+
+const VideoPlayer = dynamic(() => import('@/components/VideoPlayer'), { ssr: false })
+
+const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3050'
+
+function StreamPlayerModal({ stream, onClose }) {
+  const proxyUrl = `${BASE}/api/proxy/stream/${stream.id}`
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000,
+        background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(6px)',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        padding: 20,
+      }}
+    >
+      <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 640 }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{
+              fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
+              background: stream.quality === 'HD' ? 'rgba(0,255,135,0.1)' : 'rgba(96,165,250,0.1)',
+              color: stream.quality === 'HD' ? '#00FF87' : '#60a5fa',
+            }}>{stream.quality}</span>
+            <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', fontFamily: 'monospace' }}>
+              {stream.url.length > 60 ? stream.url.slice(0, 60) + '…' : stream.url}
+            </span>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 8,
+              color: '#fff', padding: '6px 12px', cursor: 'pointer', fontSize: 14,
+            }}
+          >
+            ✕ Close
+          </button>
+        </div>
+        <VideoPlayer key={proxyUrl} url={proxyUrl} isLive={true} />
+        <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', marginTop: 8, textAlign: 'center' }}>
+          Playing via backend proxy · source: {stream.source_name}
+        </p>
+      </div>
+    </div>
+  )
+}
 
 // ─── tiny shared styles ───────────────────────────────────────────────────────
 const input = (extra = {}) => ({
@@ -28,11 +77,12 @@ const EMPTY_STREAM = { url: '', quality: 'SD' }
 
 // ─── MatchRow ─────────────────────────────────────────────────────────────────
 function MatchRow({ match, onDelete, onStreamAdded }) {
-  const [open, setOpen]         = useState(false)
-  const [streams, setStreams]   = useState(null)
-  const [sForm, setSForm]       = useState(EMPTY_STREAM)
-  const [sLoading, setSLoading] = useState(false)
-  const [sError, setSError]     = useState('')
+  const [open, setOpen]               = useState(false)
+  const [streams, setStreams]         = useState(null)
+  const [sForm, setSForm]             = useState(EMPTY_STREAM)
+  const [sLoading, setSLoading]       = useState(false)
+  const [sError, setSError]           = useState('')
+  const [playingStream, setPlaying]   = useState(null)
 
   const loadStreams = useCallback(async () => {
     const data = await adminFetch(`/api/admin/matches/${match.id}/streams`)
@@ -65,91 +115,114 @@ function MatchRow({ match, onDelete, onStreamAdded }) {
   }
 
   return (
-    <div style={{
-      background: '#141824', borderRadius: 10,
-      border: '1px solid rgba(255,255,255,0.07)',
-      overflow: 'hidden',
-    }}>
-      {/* Match header row */}
-      <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 700, color: '#fff', fontSize: 14, marginBottom: 3 }}>
-            {match.home_team} <span style={{ color: 'rgba(255,255,255,0.35)' }}>vs</span> {match.away_team}
-          </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {match.league && <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>{match.league}</span>}
-            <span style={{
-              fontSize: 11, fontWeight: 700, padding: '1px 8px', borderRadius: 20,
-              background: match.status === 'live' ? 'rgba(255,68,68,0.15)' : 'rgba(255,255,255,0.07)',
-              color: match.status === 'live' ? '#ff6b6b' : 'rgba(255,255,255,0.5)',
-            }}>{match.status}</span>
-            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>
-              {+match.stream_count} stream{+match.stream_count !== 1 ? 's' : ''}
-            </span>
-          </div>
-        </div>
-        <button onClick={toggleOpen} style={btn('ghost', { padding: '6px 12px', fontSize: 12 })}>
-          {open ? '▲ Hide' : '▼ Streams'}
-        </button>
-        <button onClick={() => { if (confirm('Delete this match and all its streams?')) onDelete(match.id) }}
-          style={btn('danger', { padding: '7px 10px' })}>
-          🗑
-        </button>
-      </div>
-
-      {/* Expandable streams panel */}
-      {open && (
-        <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '14px 16px', background: 'rgba(0,0,0,0.2)' }}>
-          {/* Existing streams */}
-          {streams === null && <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>Loading…</div>}
-          {streams?.length === 0 && <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>No stream URLs yet.</div>}
-          {streams?.map((s) => (
-            <div key={s.id} style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.04)',
-            }}>
-              <span style={{
-                flexShrink: 0, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
-                background: s.quality === 'HD' ? 'rgba(0,255,135,0.1)' : 'rgba(96,165,250,0.1)',
-                color: s.quality === 'HD' ? '#00FF87' : '#60a5fa',
-              }}>{s.quality}</span>
-              <span style={{ flex: 1, fontSize: 12, color: 'rgba(255,255,255,0.6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {s.url}
-              </span>
-              <span style={{
-                flexShrink: 0, fontSize: 10, padding: '2px 7px', borderRadius: 20,
-                background: s.is_healthy ? 'rgba(0,255,135,0.08)' : 'rgba(255,68,68,0.1)',
-                color: s.is_healthy ? '#00FF87' : '#ff6b6b',
-              }}>{s.is_healthy ? 'healthy' : 'down'}</span>
-              <button onClick={() => deleteStream(s.id)} style={btn('danger', { padding: '4px 8px', fontSize: 11 })}>✕</button>
-            </div>
-          ))}
-
-          {/* Add stream form */}
-          <form onSubmit={addStream} style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
-            <input
-              placeholder="Stream URL (m3u8 / flv)"
-              value={sForm.url}
-              onChange={(e) => setSForm({ ...sForm, url: e.target.value })}
-              required
-              style={input({ flex: '1 1 260px' })}
-            />
-            <select
-              value={sForm.quality}
-              onChange={(e) => setSForm({ ...sForm, quality: e.target.value })}
-              style={input({ flex: '0 0 80px', cursor: 'pointer' })}
-            >
-              <option>SD</option>
-              <option>HD</option>
-            </select>
-            <button type="submit" disabled={sLoading} style={btn('primary', { flexShrink: 0 })}>
-              {sLoading ? '…' : '+ Add'}
-            </button>
-          </form>
-          {sError && <div style={{ color: '#ff6b6b', fontSize: 12, marginTop: 6 }}>{sError}</div>}
-        </div>
+    <>
+      {playingStream && (
+        <StreamPlayerModal stream={playingStream} onClose={() => setPlaying(null)} />
       )}
-    </div>
+
+      <div style={{
+        background: '#141824', borderRadius: 10,
+        border: '1px solid rgba(255,255,255,0.07)',
+        overflow: 'hidden',
+      }}>
+        {/* Match header row */}
+        <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 700, color: '#fff', fontSize: 14, marginBottom: 3 }}>
+              {match.home_team} <span style={{ color: 'rgba(255,255,255,0.35)' }}>vs</span> {match.away_team}
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {match.league && <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>{match.league}</span>}
+              <span style={{
+                fontSize: 11, fontWeight: 700, padding: '1px 8px', borderRadius: 20,
+                background: match.status === 'live' ? 'rgba(0,255,135,0.12)' : 'rgba(255,255,255,0.07)',
+                color: match.status === 'live' ? '#00FF87' : 'rgba(255,255,255,0.5)',
+              }}>{match.status}</span>
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>
+                {+match.stream_count} stream{+match.stream_count !== 1 ? 's' : ''}
+              </span>
+            </div>
+          </div>
+          <button onClick={toggleOpen} style={btn('ghost', { padding: '6px 12px', fontSize: 12 })}>
+            {open ? '▲ Hide' : '▼ Streams'}
+          </button>
+          <button
+            onClick={() => { if (confirm('Delete this match and all its streams?')) onDelete(match.id) }}
+            style={btn('danger', { padding: '7px 10px' })}
+          >
+            🗑
+          </button>
+        </div>
+
+        {/* Expandable streams panel */}
+        {open && (
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '14px 16px', background: 'rgba(0,0,0,0.2)' }}>
+            {streams === null && <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>Loading…</div>}
+            {streams?.length === 0 && <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>No stream URLs yet.</div>}
+
+            {streams?.map((s) => (
+              <div key={s.id} style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.04)',
+              }}>
+                <span style={{
+                  flexShrink: 0, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
+                  background: s.quality === 'HD' ? 'rgba(0,255,135,0.1)' : 'rgba(96,165,250,0.1)',
+                  color: s.quality === 'HD' ? '#00FF87' : '#60a5fa',
+                }}>{s.quality}</span>
+
+                <span style={{ flex: 1, fontSize: 12, color: 'rgba(255,255,255,0.6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {s.url}
+                </span>
+
+                <span style={{
+                  flexShrink: 0, fontSize: 10, padding: '2px 7px', borderRadius: 20,
+                  background: s.is_healthy ? 'rgba(0,255,135,0.08)' : 'rgba(255,68,68,0.1)',
+                  color: s.is_healthy ? '#00FF87' : '#ff6b6b',
+                }}>{s.is_healthy ? 'healthy' : 'down'}</span>
+
+                {/* Play button */}
+                <button
+                  onClick={() => setPlaying(s)}
+                  style={{
+                    flexShrink: 0, border: '1px solid rgba(0,255,135,0.3)',
+                    borderRadius: 6, padding: '3px 10px', fontSize: 11, fontWeight: 700,
+                    background: 'rgba(0,255,135,0.08)', color: '#00FF87', cursor: 'pointer',
+                  }}
+                >
+                  ▶ Play
+                </button>
+
+                <button onClick={() => deleteStream(s.id)} style={btn('danger', { padding: '4px 8px', fontSize: 11 })}>✕</button>
+              </div>
+            ))}
+
+            {/* Add stream form */}
+            <form onSubmit={addStream} style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+              <input
+                placeholder="Stream URL (m3u8 / flv)"
+                value={sForm.url}
+                onChange={(e) => setSForm({ ...sForm, url: e.target.value })}
+                required
+                style={input({ flex: '1 1 260px' })}
+              />
+              <select
+                value={sForm.quality}
+                onChange={(e) => setSForm({ ...sForm, quality: e.target.value })}
+                style={input({ flex: '0 0 80px', cursor: 'pointer' })}
+              >
+                <option>SD</option>
+                <option>HD</option>
+              </select>
+              <button type="submit" disabled={sLoading} style={btn('primary', { flexShrink: 0 })}>
+                {sLoading ? '…' : '+ Add'}
+              </button>
+            </form>
+            {sError && <div style={{ color: '#ff6b6b', fontSize: 12, marginTop: 6 }}>{sError}</div>}
+          </div>
+        )}
+      </div>
+    </>
   )
 }
 

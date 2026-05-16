@@ -8,8 +8,9 @@ import { translateLeague, leagueIcon } from '../lib/leagues'
 
 const localTime = (iso) => {
   if (!iso) return ''
-  return new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })
+  return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true })
 }
+
 
 const localDate = (iso) => {
   if (!iso) return ''
@@ -36,7 +37,7 @@ export default function MatchCard({ match, multiSource = false }) {
   const timeStr    = localTime(match.scheduled_at)
   const dateStr    = localDate(match.scheduled_at)
 
-  const hasScore   = match.score_home != null && match.score_away != null
+  const hasScore     = match.score_home != null && match.score_away != null
 
   return (
     <div
@@ -48,7 +49,7 @@ export default function MatchCard({ match, multiSource = false }) {
           : '#141824',
         borderRadius: 16,
         border: `1px solid ${
-          isLive     ? 'rgba(255,68,68,0.25)' :
+          isLive     ? 'rgba(0,255,135,0.18)' :
           soon       ? 'rgba(245,158,11,0.2)' :
           isFinished ? 'rgba(255,255,255,0.04)' :
                        'rgba(255,255,255,0.07)'
@@ -64,7 +65,7 @@ export default function MatchCard({ match, multiSource = false }) {
         e.currentTarget.style.transform = 'translateY(-1px)'
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = isLive ? 'rgba(255,68,68,0.25)' : soon ? 'rgba(245,158,11,0.2)' : 'rgba(255,255,255,0.07)'
+        e.currentTarget.style.borderColor = isLive ? 'rgba(0,255,135,0.18)' : soon ? 'rgba(245,158,11,0.2)' : 'rgba(255,255,255,0.07)'
         e.currentTarget.style.transform = 'translateY(0)'
       }}
     >
@@ -75,7 +76,7 @@ export default function MatchCard({ match, multiSource = false }) {
           {isLive && (
             <span style={{
               display: 'inline-block', width: 6, height: 6, borderRadius: '50%',
-              background: '#ff4444',
+              background: '#00FF87',
               animation: 'livePulse 1.4s ease-in-out infinite',
               flexShrink: 0,
             }} />
@@ -127,27 +128,14 @@ export default function MatchCard({ match, multiSource = false }) {
                 {hasScore ? `${match.score_home} - ${match.score_away}` : 'VS'}
               </span>
 
-              {/* Elapsed minutes — pulsing */}
-              {match.elapsed_minutes != null ? (
-                <span style={{
-                  fontSize: 12, fontWeight: 800, color: '#ff4444',
-                  background: 'rgba(255,68,68,0.12)',
-                  border: '1px solid rgba(255,68,68,0.25)',
-                  borderRadius: 6, padding: '2px 8px', letterSpacing: 0.5,
-                  animation: 'livePulse 2s ease-in-out infinite',
-                }}>
-                  {match.elapsed_minutes}&apos;
-                </span>
-              ) : (
-                <span style={{
-                  fontSize: 10, fontWeight: 700, color: '#ff4444',
-                  background: 'rgba(255,68,68,0.1)',
-                  border: '1px solid rgba(255,68,68,0.2)',
-                  borderRadius: 6, padding: '2px 8px', letterSpacing: 0.5,
-                }}>
-                  LIVE
-                </span>
-              )}
+              <span style={{
+                fontSize: 10, fontWeight: 700, color: '#00FF87',
+                background: 'rgba(0,255,135,0.08)',
+                border: '1px solid rgba(0,255,135,0.2)',
+                borderRadius: 6, padding: '2px 8px', letterSpacing: 0.5,
+              }}>
+                LIVE
+              </span>
 
               {/* Kickoff time (local) */}
               {match.scheduled_at && (

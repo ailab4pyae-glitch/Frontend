@@ -1,33 +1,51 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { Suspense, useEffect, useCallback } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useConfig } from '@/lib/config'
 import Header from '@/components/Header'
 import TabStrip from '@/components/TabStrip'
 import MatchList from '@/components/MatchList'
 import BottomNav from '@/components/BottomNav'
+import AdBanner from '@/components/AdBanner'
 
-export default function Home() {
+function HomeContent() {
   const { tabs, ui } = useConfig()
+  const router = useRouter()
+  const searchParams = useSearchParams()
 
-  // Derive the default tab from backend config; fall back to first tab or 'main-live'
   const defaultTab = ui?.defaultTab || tabs[0]?.slug || 'main-live'
-  const [activeTab, setActiveTab] = useState(defaultTab)
+  const activeTab = searchParams.get('tab') || defaultTab
 
-  // Once config loads, sync activeTab if the user hasn't manually switched yet
+  // Once config loads, write the default tab into the URL if nothing is set yet
   useEffect(() => {
-    if (tabs.length > 0 && activeTab === 'main-live') {
-      setActiveTab(defaultTab)
+    if (!searchParams.get('tab') && tabs.length > 0) {
+      router.replace(`/?tab=${defaultTab}`, { scroll: false })
     }
   }, [defaultTab]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleTabChange = useCallback((slug) => {
+    // replace so tab switches don't pollute the back-stack
+    router.replace(`/?tab=${encodeURIComponent(slug)}`, { scroll: false })
+  }, [router])
 
   return (
     <div style={{ minHeight: '100vh', background: ui?.bgColor || '#0A0E1A' }}>
       <Header />
-      <TabStrip tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
+      <TabStrip tabs={tabs} activeTab={activeTab} onTabChange={handleTabChange} />
+      <AdBanner page="home" slot="home_top" style={{ padding: '8px 16px 0' }} />
       <main>
         <MatchList key={activeTab} tab={activeTab} />
       </main>
+      <AdBanner page="home" slot="home_bottom" style={{ padding: '0 16px 8px' }} />
       <BottomNav />
     </div>
+  )
+}
+
+export default function Home() {
+  return (
+    <Suspense>
+      <HomeContent />
+    </Suspense>
   )
 }

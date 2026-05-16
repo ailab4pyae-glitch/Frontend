@@ -6,6 +6,7 @@ import { isAuthenticated, clearToken } from '@/lib/auth'
 const NAV = [
   { label: 'Dashboard', href: '/admin',          icon: '📊' },
   { label: 'Matches',   href: '/admin/matches',  icon: '⚽' },
+  { label: 'TV & Radio',href: '/admin/tv',       icon: '📺' },
   { label: 'Sources',   href: '/admin/sources',  icon: '🔌' },
   { label: 'Config',    href: '/admin/config',   icon: '⚙️'  },
   { label: 'Tests',     href: '/admin/tests',    icon: '🧪' },

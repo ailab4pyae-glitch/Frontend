@@ -2,11 +2,13 @@
 
 const getFormat = (url = '') => url.includes('.m3u8') ? 'HLS' : url.includes('.flv') ? 'FLV' : 'STREAM'
 
-export default function ServerSelector({ streams = { SD: [], HD: [] }, activeUrl, onSelect }) {
+export default function ServerSelector({ streams, activeUrl, onSelect }) {
+  const SD = Array.isArray(streams?.SD) ? streams.SD : []
+  const HD = Array.isArray(streams?.HD) ? streams.HD : []
   // SD first — matches allUrls order in WatchPage (default plays SD for low-bandwidth users)
   const allServers = [
-    ...streams.SD.map((s, i) => ({ ...s, quality: 'SD', format: getFormat(s.url), index: i })),
-    ...streams.HD.map((s, i) => ({ ...s, quality: 'HD', format: getFormat(s.url), index: i })),
+    ...SD.map((s, i) => ({ ...s, quality: 'SD', format: getFormat(s.url), index: i })),
+    ...HD.map((s, i) => ({ ...s, quality: 'HD', format: getFormat(s.url), index: i })),
   ]
 
   if (allServers.length === 0) {
