@@ -2,7 +2,9 @@
 import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from 'react'
 import { activeStream, killActiveStream } from '@/lib/player'
 
-const isFlv = (url) => /\.flv(\?|$)/i.test(url) || /\/proxy\/flv\//i.test(url)
+const isFlv    = (url) => /\.flv(\?|$)/i.test(url) || /\/proxy\/flv\//i.test(url)
+const isHls    = (url) => /\.m3u8(\?|$)/i.test(url) || /\/proxy\/stream\//i.test(url)
+const isIframe = (url) => url && !isFlv(url) && !isHls(url)
 const SWITCH_DELAY = 30
 
 const getNetworkTier = () => {
@@ -221,7 +223,6 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
       ready = true
       if (loadTimeoutRef.current) { clearTimeout(loadTimeoutRef.current); loadTimeoutRef.current = null }
       setLoading(false)
-      video.play().catch(() => {})
       startStallDetector(video)
       if (isLive) startLiveCatchup(video)
     }
@@ -248,7 +249,10 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
         player.attachMediaElement(video)
         player.load()
         player.on(flvjs.Events.ERROR, () => handleFatalError())
-        player.on(flvjs.Events.MEDIA_INFO, () => onReady())
+        player.on(flvjs.Events.MEDIA_INFO, () => {
+          player.play()
+          video.addEventListener('playing', () => { if (!stopped) { onReady() } }, { once: true })
+        })
       })()
     } else {
       ;(async () => {
@@ -288,14 +292,16 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
           activeStream.hls = hls
           hls.loadSource(url)
           hls.attachMedia(video)
-          hls.on(Hls.Events.MANIFEST_PARSED, () => onReady())
+          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            video.play().catch(() => {})
+            // Hide spinner on first frame, not just manifest — prevents gray-box flash
+            video.addEventListener('playing', () => { if (!stopped) { onReady() } }, { once: true })
+          })
           hls.on(Hls.Events.ERROR, (_, data) => { if (data.fatal) handleFatalError() })
         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
           video.src = url
-          video.addEventListener('loadedmetadata', function onMeta() {
-            video.removeEventListener('loadedmetadata', onMeta)
-            onReady()
-          })
+          video.play().catch(() => {})
+          video.addEventListener('playing', onReady, { once: true })
           video.addEventListener('error', handleError, { once: true })
         } else {
           handleError()
@@ -309,6 +315,23 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
       if (mountedRef.current) destroyStream()
     }
   }, [url, isLive, handleError, handleFatalError, destroyStream, startStallDetector, startLiveCatchup])
+
+  // Iframe-based player for stream server URLs (e.g. livepingscorex.com)
+  if (isIframe(url)) {
+    return (
+      <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', background: '#000', borderRadius: 12, overflow: 'hidden' }}>
+        <iframe
+          key={url}
+          src={url}
+          style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+          allowFullScreen
+          allow="autoplay; encrypted-media; fullscreen"
+          referrerPolicy="no-referrer"
+          scrolling="no"
+        />
+      </div>
+    )
+  }
 
   return (
     <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', background: '#000', borderRadius: 12, overflow: 'hidden' }}>
