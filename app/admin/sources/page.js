@@ -254,27 +254,158 @@ function useScraperRun(slug) {
   return { running, lastRunAt, trigger }
 }
 
+// Normalise DB value → [{url, enabled}]
+const normaliseUrls = (raw) =>
+  (raw || []).map((u) => (typeof u === 'string' ? { url: u, enabled: true } : { url: u.url ?? '', enabled: u.enabled !== false }))
+
+function Toggle({ on, onChange, size = 38 }) {
+  return (
+    <button
+      onClick={() => onChange(!on)}
+      title={on ? 'Enabled — click to disable' : 'Disabled — click to enable'}
+      style={{
+        width: size, height: Math.round(size * 0.55), borderRadius: size,
+        border: 'none', flexShrink: 0,
+        background: on ? '#00FF87' : 'rgba(255,255,255,0.12)',
+        cursor: 'pointer', position: 'relative', transition: 'background .2s',
+      }}
+    >
+      <span style={{
+        position: 'absolute', top: 3, borderRadius: '50%',
+        width: Math.round(size * 0.55) - 6, height: Math.round(size * 0.55) - 6,
+        background: on ? '#0A0E1A' : 'rgba(255,255,255,0.5)',
+        left: on ? size - Math.round(size * 0.55) + 3 : 3,
+        transition: 'left .2s',
+      }} />
+    </button>
+  )
+}
+
+function UrlList({ items, onChange }) {
+  const move = (from, to) => {
+    const next = [...items]
+    const [el] = next.splice(from, 1)
+    next.splice(to, 0, el)
+    onChange(next)
+  }
+  const setEnabled = (i, val) => {
+    const next = items.map((u, idx) => idx === i ? { ...u, enabled: val } : u)
+    onChange(next)
+  }
+  const setUrl = (i, val) => {
+    const next = items.map((u, idx) => idx === i ? { ...u, url: val } : u)
+    onChange(next)
+  }
+  const remove = (i) => onChange(items.filter((_, idx) => idx !== i))
+  const add    = ()  => onChange([...items, { url: '', enabled: true }])
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+        <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>
+          Mirror URLs — #1 tried first
+        </label>
+        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)' }}>
+          {items.filter((u) => u.enabled).length} / {items.length} enabled
+        </span>
+      </div>
+
+      {items.map((item, i) => (
+        <div key={i} style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          background: item.enabled ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.01)',
+          borderRadius: 8, padding: '6px 8px',
+          border: `1px solid ${item.enabled ? 'rgba(0,255,135,0.1)' : 'rgba(255,255,255,0.05)'}`,
+          opacity: item.enabled ? 1 : 0.5,
+          transition: 'opacity .2s',
+        }}>
+          {/* Order badge */}
+          <span style={{
+            fontSize: 11, fontWeight: 700, flexShrink: 0, minWidth: 22, textAlign: 'center',
+            color: item.enabled ? '#00FF87' : 'rgba(255,255,255,0.2)',
+          }}>
+            {i + 1}
+          </span>
+
+          {/* On/Off toggle */}
+          <Toggle on={item.enabled} onChange={(v) => setEnabled(i, v)} size={34} />
+
+          {/* URL input */}
+          <input
+            value={item.url}
+            onChange={(e) => setUrl(i, e.target.value)}
+            placeholder="https://..."
+            style={inp({ flex: 1, fontSize: 13, padding: '7px 10px',
+              opacity: item.enabled ? 1 : 0.5,
+              textDecoration: item.enabled ? 'none' : 'line-through',
+            })}
+          />
+
+          {/* Move up */}
+          <button
+            onClick={() => move(i, i - 1)}
+            disabled={i === 0}
+            title="Move up"
+            style={{
+              border: 'none', background: 'rgba(255,255,255,0.05)', borderRadius: 6,
+              color: i === 0 ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.5)',
+              cursor: i === 0 ? 'default' : 'pointer',
+              padding: '4px 7px', fontSize: 12, flexShrink: 0,
+            }}
+          >▲</button>
+
+          {/* Move down */}
+          <button
+            onClick={() => move(i, i + 1)}
+            disabled={i === items.length - 1}
+            title="Move down"
+            style={{
+              border: 'none', background: 'rgba(255,255,255,0.05)', borderRadius: 6,
+              color: i === items.length - 1 ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.5)',
+              cursor: i === items.length - 1 ? 'default' : 'pointer',
+              padding: '4px 7px', fontSize: 12, flexShrink: 0,
+            }}
+          >▼</button>
+
+          {/* Remove */}
+          <button
+            onClick={() => remove(i)}
+            title="Remove"
+            style={{
+              border: 'none', borderRadius: 6, padding: '4px 8px',
+              background: 'rgba(255,68,68,0.08)', color: 'rgba(255,107,107,0.6)',
+              cursor: 'pointer', fontSize: 14, flexShrink: 0,
+            }}
+          >✕</button>
+        </div>
+      ))}
+
+      <button onClick={add} style={{
+        alignSelf: 'flex-start', border: '1px dashed rgba(0,255,135,0.3)',
+        background: 'none', borderRadius: 8, padding: '6px 14px', marginTop: 2,
+        color: '#00FF87', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+      }}>
+        + Add mirror URL
+      </button>
+    </div>
+  )
+}
+
 function SourceCard({ src, saving, saved, onSave }) {
-  // Keep a local editable copy of the config
-  const [config, setConfig] = useState(() => ({ ...src.config }))
-  const [active, setActive] = useState(src.is_active)
+  const rawUrls    = Array.isArray(src.config?.base_urls) ? normaliseUrls(src.config.base_urls) : null
+  const [config,   setConfig]   = useState(() => ({ ...src.config }))
+  const [urlItems, setUrlItems] = useState(() => rawUrls ?? [])
+  const [active,   setActive]   = useState(src.is_active)
   const { running, lastRunAt, trigger } = useScraperRun(src.slug)
 
-  // For sources with base_urls array (socolive)
-  const isMultiUrl = Array.isArray(config.base_urls)
-  // For sources with api_base string (chinalive)
+  const isMultiUrl  = rawUrls !== null
   const isSingleUrl = typeof config.api_base === 'string'
 
-  const updateUrl = (idx, val) => {
-    const urls = [...(config.base_urls || [])]
-    urls[idx] = val
-    setConfig((c) => ({ ...c, base_urls: urls }))
-  }
-
-  const addUrl = () => setConfig((c) => ({ ...c, base_urls: [...(c.base_urls || []), ''] }))
-  const removeUrl = (idx) => {
-    const urls = (config.base_urls || []).filter((_, i) => i !== idx)
-    setConfig((c) => ({ ...c, base_urls: urls }))
+  const handleSave = () => {
+    const finalConfig = isMultiUrl
+      ? { ...config, base_urls: urlItems.map(({ url, enabled }) => ({ url, enabled })) }
+      : config
+    onSave({ is_active: active, config: finalConfig })
   }
 
   return (
@@ -300,66 +431,21 @@ function SourceCard({ src, saving, saved, onSave }) {
           )}
         </div>
 
-        {/* Active toggle */}
+        {/* Source-level active toggle */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 12, color: active ? '#00FF87' : 'rgba(255,255,255,0.35)', fontWeight: 600 }}>
             {active ? 'Active' : 'Disabled'}
           </span>
-          <button
-            onClick={() => setActive((v) => !v)}
-            style={{
-              width: 44, height: 24, borderRadius: 12, border: 'none',
-              background: active ? '#00FF87' : 'rgba(255,255,255,0.12)',
-              cursor: 'pointer', position: 'relative', transition: 'background .2s',
-            }}
-          >
-            <span style={{
-              position: 'absolute', top: 3, borderRadius: '50%',
-              width: 18, height: 18,
-              background: active ? '#0A0E1A' : 'rgba(255,255,255,0.5)',
-              left: active ? 23 : 3, transition: 'left .2s',
-            }} />
-          </button>
+          <Toggle on={active} onChange={setActive} size={44} />
         </div>
       </div>
 
       {/* URL fields */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
         {/* Multi-URL (socolive) */}
         {isMultiUrl && (
-          <>
-            <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>
-              Base URLs (tried in order, first success wins)
-            </label>
-            {(config.base_urls || []).map((url, i) => (
-              <div key={i} style={{ display: 'flex', gap: 8 }}>
-                <span style={{ color: 'rgba(255,255,255,0.25)', fontSize: 12, paddingTop: 10, flexShrink: 0, minWidth: 20 }}>
-                  {i + 1}.
-                </span>
-                <input
-                  value={url}
-                  onChange={(e) => updateUrl(i, e.target.value)}
-                  placeholder="https://..."
-                  style={inp({ flex: 1 })}
-                />
-                {(config.base_urls || []).length > 1 && (
-                  <button onClick={() => removeUrl(i)} style={{
-                    border: 'none', borderRadius: 8, padding: '0 12px',
-                    background: 'rgba(255,68,68,0.1)', color: '#ff6b6b',
-                    cursor: 'pointer', fontSize: 16, flexShrink: 0,
-                  }}>✕</button>
-                )}
-              </div>
-            ))}
-            <button onClick={addUrl} style={{
-              alignSelf: 'flex-start', border: '1px dashed rgba(0,255,135,0.3)',
-              background: 'none', borderRadius: 8, padding: '7px 14px',
-              color: '#00FF87', fontSize: 13, fontWeight: 600, cursor: 'pointer',
-            }}>
-              + Add fallback URL
-            </button>
-          </>
+          <UrlList items={urlItems} onChange={setUrlItems} />
         )}
 
         {/* Single API base (chinalive) */}
@@ -410,9 +496,9 @@ function SourceCard({ src, saving, saved, onSave }) {
       </div>
 
       {/* Save + Run Now */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 18, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 20, flexWrap: 'wrap' }}>
         <button
-          onClick={() => onSave({ is_active: active, config })}
+          onClick={handleSave}
           disabled={saving}
           style={{
             border: 'none', borderRadius: 8, padding: '10px 24px',
@@ -425,7 +511,6 @@ function SourceCard({ src, saving, saved, onSave }) {
           {saving ? 'Saving…' : saved ? '✓ Saved' : 'Save Changes'}
         </button>
 
-        {/* Only show Run Now for known scrapers */}
         {(src.slug === 'chinalive' || src.slug === 'socolive') && (
           <button
             onClick={trigger}

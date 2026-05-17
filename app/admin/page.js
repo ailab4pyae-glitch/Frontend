@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { adminFetch } from '@/lib/auth'
 
 const Stat = ({ label, value, sub, color = '#00FF87' }) => (
@@ -29,18 +29,142 @@ const RESULT_STYLE = {
   skipped: { color: '#f59e0b', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.2)', icon: '⏭', label: 'Skipped' },
 }
 
-function ScraperCard({ scraper, onRun }) {
+const LOG_COLOR = { error: '#ef4444', warn: '#f59e0b', info: '#a3e635' }
+
+function ScraperLogs({ slug, onClose }) {
+  const [lines,   setLines]   = useState([])
+  const [running, setRunning] = useState(false)
+  const sinceRef  = useRef(0)
+  const bottomRef = useRef(null)
+
+  useEffect(() => {
+    setLines([])
+    sinceRef.current = 0
+    setRunning(false)
+  }, [slug])
+
+  useEffect(() => {
+    if (!slug) return
+
+    const poll = async () => {
+      try {
+        const data = await adminFetch(
+          `/api/admin/scrapers/${slug}/logs?since=${sinceRef.current}`
+        )
+        if (!data) return
+        setRunning(data.running)
+        if (data.lines?.length) {
+          setLines((prev) => {
+            const next = [...prev, ...data.lines].slice(-500)
+            sinceRef.current = next[next.length - 1].ts
+            return next
+          })
+        }
+      } catch {}
+    }
+
+    poll()
+    const id = setInterval(poll, 2000)
+    return () => clearInterval(id)
+  }, [slug])
+
+  // Auto-scroll to bottom when new lines arrive
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [lines])
+
+  return (
+    <div style={{
+      background: '#080d16', borderRadius: 10,
+      border: '1px solid rgba(255,255,255,0.1)',
+      marginTop: 8,
+    }}>
+      {/* Header */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '10px 14px', borderBottom: '1px solid rgba(255,255,255,0.07)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {running && (
+            <div style={{
+              width: 7, height: 7, borderRadius: '50%', background: '#60a5fa',
+              boxShadow: '0 0 6px rgba(96,165,250,0.7)',
+              animation: 'livePulse 1.4s ease-in-out infinite',
+            }} />
+          )}
+          <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#60a5fa', fontWeight: 700 }}>
+            [{slug}] live logs
+          </span>
+          {running && (
+            <span style={{ fontSize: 10, color: 'rgba(96,165,250,0.6)' }}>running…</span>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button
+            onClick={() => { setLines([]); sinceRef.current = 0 }}
+            style={{
+              background: 'none', border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: 6, padding: '2px 8px', fontSize: 11,
+              color: 'rgba(255,255,255,0.4)', cursor: 'pointer',
+            }}
+          >
+            Clear
+          </button>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'none', border: 'none', color: 'rgba(255,255,255,0.3)',
+              cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: '0 2px',
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+
+      {/* Log lines */}
+      <div style={{
+        fontFamily: 'monospace', fontSize: 11, lineHeight: 1.6,
+        maxHeight: 320, overflowY: 'auto',
+        padding: '10px 14px',
+      }}>
+        {lines.length === 0 ? (
+          <div style={{ color: 'rgba(255,255,255,0.2)' }}>
+            {running ? 'Waiting for log output…' : 'No logs yet. Click Run to start.'}
+          </div>
+        ) : (
+          lines.map((line, i) => (
+            <div key={i} style={{ color: LOG_COLOR[line.level] || '#ccc', marginBottom: 1 }}>
+              <span style={{ color: 'rgba(255,255,255,0.25)', marginRight: 8 }}>
+                {new Date(line.ts).toLocaleTimeString('en-GB')}
+              </span>
+              {line.msg}
+            </div>
+          ))
+        )}
+        <div ref={bottomRef} />
+      </div>
+    </div>
+  )
+}
+
+function ScraperCard({ scraper, selected, onRun, onSelect }) {
   const result  = scraper.last_result
   const rs      = result ? (RESULT_STYLE[result.status] || RESULT_STYLE.error) : null
   const running = scraper.running
 
   return (
-    <div style={{
-      background: '#141824', borderRadius: 12,
-      border: `1px solid ${rs ? rs.border : 'rgba(255,255,255,0.07)'}`,
-      padding: '18px 20px',
-      display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap',
-    }}>
+    <div
+      onClick={() => onSelect(scraper.slug)}
+      style={{
+        background: '#141824', borderRadius: 12,
+        border: `1px solid ${selected ? 'rgba(96,165,250,0.4)' : (rs ? rs.border : 'rgba(255,255,255,0.07)')}`,
+        padding: '18px 20px',
+        display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap',
+        cursor: 'pointer',
+        transition: 'border-color 0.15s',
+      }}
+    >
       {/* Status dot */}
       <div style={{
         width: 10, height: 10, borderRadius: '50%', flexShrink: 0,
@@ -92,7 +216,7 @@ function ScraperCard({ scraper, onRun }) {
 
       {/* Run Now button */}
       <button
-        onClick={() => onRun(scraper.slug)}
+        onClick={(e) => { e.stopPropagation(); onRun(scraper.slug) }}
         disabled={running || !scraper.is_active}
         style={{
           flexShrink: 0, border: `1px solid ${running ? 'rgba(96,165,250,0.2)' : 'rgba(96,165,250,0.4)'}`,
@@ -109,9 +233,10 @@ function ScraperCard({ scraper, onRun }) {
 }
 
 export default function AdminDashboard() {
-  const [stats,    setStats]    = useState(null)
-  const [scrapers, setScrapers] = useState([])
-  const [error,    setError]    = useState('')
+  const [stats,        setStats]        = useState(null)
+  const [scrapers,     setScrapers]     = useState([])
+  const [error,        setError]        = useState('')
+  const [selectedSlug, setSelectedSlug] = useState(null)
 
   const loadAll = () => Promise.all([
     adminFetch('/api/admin/stats').then(setStats).catch((e) => setError(e.message)),
@@ -120,18 +245,21 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     loadAll()
-    // Refresh scraper status every 10s so "Running…" resolves automatically
-    const id = setInterval(() => adminFetch('/api/admin/scrapers').then(setScrapers).catch(() => {}), 10000)
+    const id = setInterval(() => adminFetch('/api/admin/scrapers').then(setScrapers).catch(() => {}), 5000)
     return () => clearInterval(id)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const runScraper = async (slug) => {
+    setSelectedSlug(slug)
     setScrapers((prev) => prev.map((s) => s.slug === slug ? { ...s, running: true } : s))
     try {
-      await adminFetch(`/api/admin/scrapers/${slug}/run`, { method: 'POST' })
+      const res = await adminFetch(`/api/admin/scrapers/${slug}/run`, { method: 'POST' })
+      if (res?.status === 'already_running') {
+        // still show logs for the already-running scraper
+      }
     } catch (e) {
-      alert(e.message)
+      alert(`[${slug}] ${e.message}`)
       setScrapers((prev) => prev.map((s) => s.slug === slug ? { ...s, running: false } : s))
     }
   }
@@ -167,15 +295,34 @@ export default function AdminDashboard() {
       {/* Scraper Status */}
       <h3 style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>
         Scraper Status
+        <span style={{ color: 'rgba(255,255,255,0.2)', fontWeight: 400, marginLeft: 8, fontSize: 11, textTransform: 'none', letterSpacing: 0 }}>
+          — click a row to view logs
+        </span>
       </h3>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 32 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: selectedSlug ? 0 : 32 }}>
         {scrapers.length === 0 && (
           <div style={{ color: 'rgba(255,255,255,0.2)', fontSize: 13 }}>Loading…</div>
         )}
         {scrapers.map((s) => (
-          <ScraperCard key={s.slug} scraper={s} onRun={runScraper} />
+          <ScraperCard
+            key={s.slug}
+            scraper={s}
+            selected={selectedSlug === s.slug}
+            onRun={runScraper}
+            onSelect={(slug) => setSelectedSlug((prev) => prev === slug ? null : slug)}
+          />
         ))}
       </div>
+
+      {/* Log panel */}
+      {selectedSlug && (
+        <div style={{ marginBottom: 32 }}>
+          <ScraperLogs
+            slug={selectedSlug}
+            onClose={() => setSelectedSlug(null)}
+          />
+        </div>
+      )}
 
       {/* Per-tab breakdown */}
       <h3 style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>

@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from 'react'
 import { activeStream, killActiveStream } from '@/lib/player'
 
-const isFlv = (url) => /\.flv(\?|$)/i.test(url)
+const isFlv = (url) => /\.flv(\?|$)/i.test(url) || /\/proxy\/flv\//i.test(url)
 const SWITCH_DELAY = 30
 
 const getNetworkTier = () => {
