@@ -1,165 +1,208 @@
 'use client'
 
-const getFormat    = (url = '') => url.includes('.m3u8') ? 'HLS' : url.includes('.flv') ? 'FLV' : 'STREAM'
-const isIframeUrl  = (url = '') => !url.includes('.m3u8') && !url.includes('.flv')
+const getFormat = (url = '') => url.includes('.m3u8') ? 'HLS' : url.includes('.flv') ? 'FLV' : null
 
-export default function ServerSelector({ streams, activeUrl, onSelect }) {
-  const SD = Array.isArray(streams?.SD) ? streams.SD : []
-  const HD = Array.isArray(streams?.HD) ? streams.HD : []
+// ── Design tokens ─────────────────────────────────────────────────────────────
+const THEME = {
+  HD: {
+    accent:         '#e879f9',
+    glow:           'rgba(232,121,249,0.35)',
+    bgInactive:     'rgba(232,121,249,0.10)',
+    bgActive:       'linear-gradient(135deg, rgba(232,121,249,0.28) 0%, rgba(232,121,249,0.10) 100%)',
+    borderInactive: 'rgba(232,121,249,0.30)',
+    badge:          'rgba(232,121,249,0.25)',
+    label:          'HD',
+  },
+  SD: {
+    accent:         '#a78bfa',
+    glow:           'rgba(167,139,250,0.35)',
+    bgInactive:     'rgba(167,139,250,0.10)',
+    bgActive:       'linear-gradient(135deg, rgba(167,139,250,0.28) 0%, rgba(167,139,250,0.10) 100%)',
+    borderInactive: 'rgba(167,139,250,0.30)',
+    badge:          'rgba(167,139,250,0.25)',
+    label:          'SD',
+  },
+}
 
-  // SD first — lower bandwidth, better default for slow networks
-  const allServers = [
-    ...SD.map((s, i) => ({ ...s, quality: isIframeUrl(s.url) ? null : 'SD', format: getFormat(s.url), sdIdx: i })),
-    ...HD.map((s, i) => ({ ...s, quality: isIframeUrl(s.url) ? null : 'HD', format: getFormat(s.url), hdIdx: i })),
-  ]
+// ── Single stream button ───────────────────────────────────────────────────────
+function StreamButton({ server, index, isActive, onSelect }) {
+  const fmt     = getFormat(server.url)
+  const quality = server.quality  // 'HD' | 'SD'
+  const t       = quality === 'HD' ? THEME.HD : THEME.SD
+  const num     = index + 1
 
-  if (allServers.length === 0) {
-    return (
-      <div style={{
-        background: '#0d1117', borderRadius: 14,
-        border: '1px solid rgba(255,255,255,0.06)',
-        padding: '22px 16px', textAlign: 'center',
+  return (
+    <button
+      onClick={() => onSelect(server.url)}
+      style={{
+        position:   'relative',
+        background: isActive ? t.bgActive : t.bgInactive,
+        border:     `1.5px solid ${isActive ? t.accent : t.borderInactive}`,
+        borderRadius: 10,
+        padding:    '8px 10px',
+        cursor:     'pointer',
+        overflow:   'hidden',
+        boxShadow:  isActive ? `0 0 20px ${t.glow}` : 'none',
+        display:    'flex', alignItems: 'center', gap: 7,
+        width:      '100%',
+      }}
+    >
+      {/* Active left bar */}
+      {isActive && (
+        <span style={{
+          position: 'absolute', top: 0, left: 0, bottom: 0, width: 3,
+          background: t.accent, borderRadius: '10px 0 0 10px',
+        }} />
+      )}
+
+      {/* Quality badge */}
+      <span style={{
+        fontSize: 10, fontWeight: 900, padding: '2px 7px', borderRadius: 5,
+        background: t.badge, color: t.accent, letterSpacing: 0.6, flexShrink: 0,
       }}>
-        <div style={{ fontSize: 28, marginBottom: 8 }}>📡</div>
-        <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.35)', margin: 0 }}>No servers available yet</p>
-        <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)', margin: '6px 0 0' }}>Stream will appear at kickoff</p>
+        {quality}
+      </span>
+
+      {/* Server number */}
+      <span style={{
+        fontSize: 13, fontWeight: 800,
+        color: isActive ? '#fff' : t.accent,
+        flex: 1, opacity: isActive ? 1 : 0.85,
+      }}>
+        Stream {num}
+      </span>
+
+      {/* Format pill */}
+      {fmt && (
+        <span style={{
+          fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
+          background: fmt === 'HLS' ? 'rgba(255,255,255,0.07)' : 'rgba(251,191,36,0.1)',
+          color:      fmt === 'HLS' ? 'rgba(255,255,255,0.4)'  : '#fbbf24',
+          border:     `1px solid ${fmt === 'HLS' ? 'rgba(255,255,255,0.1)' : 'rgba(251,191,36,0.25)'}`,
+          flexShrink: 0,
+        }}>
+          {fmt}
+        </span>
+      )}
+
+      {/* Playing dot or signal bars */}
+      {isActive ? (
+        <span style={{
+          width: 7, height: 7, borderRadius: '50%',
+          background: t.accent, flexShrink: 0,
+          animation: 'srvDot 1.3s ease-in-out infinite',
+        }} />
+      ) : (
+        <svg width="14" height="11" viewBox="0 0 16 12" fill="none" style={{ flexShrink: 0 }}>
+          <rect x="0"    y="6" width="3"   height="6"  rx="1" fill={t.accent} opacity="0.3"/>
+          <rect x="4.5"  y="4" width="3"   height="8"  rx="1" fill={t.accent} opacity="0.45"/>
+          <rect x="9"    y="2" width="3"   height="10" rx="1" fill={t.accent} opacity="0.65"/>
+          <rect x="13.5" y="0" width="2.5" height="12" rx="1" fill={t.accent} opacity="0.85"/>
+        </svg>
+      )}
+    </button>
+  )
+}
+
+// ── Section header ────────────────────────────────────────────────────────────
+function Section({ qualityKey, servers, activeUrl, onSelect }) {
+  if (!servers.length) return null
+  const t = THEME[qualityKey] || THEME.SD
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10 }}>
+        <span style={{
+          width: 8, height: 8, borderRadius: '50%',
+          background: t.accent, flexShrink: 0,
+          boxShadow: `0 0 6px ${t.accent}`,
+        }} />
+        <span style={{
+          fontSize: 11, fontWeight: 800,
+          color: t.accent,
+          letterSpacing: 1.2, textTransform: 'uppercase',
+        }}>
+          {t.label} Quality
+        </span>
+        <span style={{ fontSize: 10, color: t.accent, fontWeight: 700, opacity: 0.6 }}>
+          {servers.length} {servers.length === 1 ? 'stream' : 'streams'}
+        </span>
       </div>
-    )
-  }
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+        {servers.map((s, i) => (
+          <StreamButton
+            key={s.id || i}
+            server={s}
+            index={i}
+            isActive={s.url === activeUrl}
+            onSelect={onSelect}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── Empty state ────────────────────────────────────────────────────────────────
+function EmptyState() {
+  return (
+    <div style={{
+      background: 'rgba(255,255,255,0.02)',
+      border: '1px solid rgba(255,255,255,0.06)',
+      borderRadius: 18, padding: '32px 16px', textAlign: 'center',
+    }}>
+      <div style={{ fontSize: 36, marginBottom: 10 }}>📡</div>
+      <p style={{ fontSize: 15, fontWeight: 700, color: 'rgba(255,255,255,0.5)', margin: '0 0 6px' }}>
+        Streams loading…
+      </p>
+      <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)', margin: 0, lineHeight: 1.6 }}>
+        Streams appear at kickoff.<br/>Check back in a moment.
+      </p>
+    </div>
+  )
+}
+
+// ── Root component ─────────────────────────────────────────────────────────────
+export default function ServerSelector({ streams, activeUrl, onSelect }) {
+  const rawSD = streams?.SD || []
+  const rawHD = streams?.HD || []
+
+  // Preserve quality from the API response — iframe URLs keep their SD/HD designation
+  const hdStreams = rawHD.map((s) => ({ ...s, quality: 'HD' }))
+  const sdStreams = rawSD.map((s) => ({ ...s, quality: 'SD' }))
+
+  const total = hdStreams.length + sdStreams.length
+  if (total === 0) return <EmptyState />
 
   return (
     <div>
       <style>{`
-        @keyframes _pulse {
+        @keyframes srvDot {
           0%,100% { opacity:1; transform:scale(1); }
-          50%      { opacity:.35; transform:scale(.65); }
+          50%      { opacity:.25; transform:scale(.55); }
         }
-        @keyframes _glow {
-          0%,100% { box-shadow: 0 0 0 0 rgba(0,255,135,.18); }
-          50%      { box-shadow: 0 0 0 5px rgba(0,255,135,.0); }
-        }
-        .srv-btn { transition: border-color .15s, background .15s, box-shadow .15s; }
-        .srv-btn:hover { border-color: rgba(255,255,255,.18) !important; background: #161d2e !important; }
       `}</style>
 
-      <p style={{
-        fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.35)',
-        letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 10,
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        marginBottom: 14,
       }}>
-        Select Server
-      </p>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
-        {allServers.map((server, idx) => {
-          const active    = server.url === activeUrl
-          const isHD      = server.quality === 'HD'
-          const isHLS     = server.format === 'HLS'
-          const noQuality = server.quality === null   // iframe — no HD/SD badge
-          const accent    = isHD ? '#00FF87' : '#60a5fa'
-          const qualIdx   = isHD ? server.hdIdx : server.sdIdx
-
-          // Label logic: iframe → "Server N", HLS → "Smooth N", FLV → "Backup N"
-          const label = noQuality
-            ? `Server ${idx + 1}`
-            : isHLS
-            ? `Smooth ${qualIdx + 1}`
-            : `Backup ${qualIdx + 1}`
-
-          return (
-            <button
-              key={idx}
-              className="srv-btn"
-              onClick={() => onSelect(server.url)}
-              style={{
-                background: active
-                  ? (isHD ? 'rgba(0,255,135,0.07)' : 'rgba(96,165,250,0.07)')
-                  : '#0d1117',
-                border: `1.5px solid ${active ? accent : 'rgba(255,255,255,0.07)'}`,
-                borderRadius: 11,
-                padding: '11px 12px',
-                display: 'flex', flexDirection: 'column', gap: 7,
-                textAlign: 'left', cursor: 'pointer',
-                boxShadow: active
-                  ? `0 0 14px ${isHD ? 'rgba(0,255,135,0.1)' : 'rgba(96,165,250,0.1)'}`
-                  : 'none',
-              }}
-            >
-              {/* ── Top row: quality/format badges + playing indicator ── */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: 20 }}>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  {/* Pulse dot — visible only when active */}
-                  {active && (
-                    <span style={{
-                      width: 7, height: 7, borderRadius: '50%',
-                      background: accent, flexShrink: 0,
-                      display: 'inline-block',
-                      animation: '_pulse 1.5s ease-in-out infinite',
-                    }} />
-                  )}
-
-                  {/* Quality badge: HD / SD — hidden for iframe servers */}
-                  {!noQuality && (
-                    <span style={{
-                      fontSize: 10, fontWeight: 800, padding: '2px 7px', borderRadius: 4,
-                      background: isHD ? 'rgba(0,255,135,0.13)' : 'rgba(96,165,250,0.13)',
-                      color: accent,
-                      letterSpacing: 0.5,
-                    }}>
-                      {server.quality}
-                    </span>
-                  )}
-
-                  {/* Format badge: HLS / FLV — hidden for iframe servers */}
-                  {!noQuality && (
-                    <span style={{
-                      fontSize: 9, fontWeight: 600, padding: '2px 5px', borderRadius: 4,
-                      background: isHLS ? 'rgba(255,255,255,0.06)' : 'rgba(255,165,0,0.09)',
-                      color: isHLS ? 'rgba(255,255,255,0.4)' : '#f59e0b',
-                      border: `1px solid ${isHLS ? 'rgba(255,255,255,0.08)' : 'rgba(245,158,11,0.18)'}`,
-                    }}>
-                      {server.format}
-                    </span>
-                  )}
-                </div>
-
-                {/* "Playing" text on active server */}
-                {active && (
-                  <span style={{
-                    fontSize: 10, fontWeight: 700,
-                    color: accent, letterSpacing: 0.3,
-                  }}>
-                    Playing
-                  </span>
-                )}
-              </div>
-
-              {/* ── Bottom row: server name + default tag ── */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{
-                  fontSize: 13, fontWeight: 600,
-                  color: active ? '#fff' : 'rgba(255,255,255,0.5)',
-                }}>
-                  {label}
-                </span>
-
-                {/* DEFAULT tag on first server when not playing */}
-                {idx === 0 && !active && (
-                  <span style={{
-                    fontSize: 9, fontWeight: 700, letterSpacing: 0.5,
-                    color: '#60a5fa',
-                    background: 'rgba(96,165,250,0.08)',
-                    border: '1px solid rgba(96,165,250,0.18)',
-                    borderRadius: 4, padding: '1px 5px',
-                  }}>
-                    DEFAULT
-                  </span>
-                )}
-              </div>
-            </button>
-          )
-        })}
+        <span style={{
+          fontSize: 13, fontWeight: 800,
+          color: 'rgba(255,255,255,0.55)',
+          letterSpacing: 0.8, textTransform: 'uppercase',
+        }}>
+          Select Stream
+        </span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: '#a78bfa' }}>
+          {total} available
+        </span>
       </div>
+
+      {/* HD first — best quality on top */}
+      <Section qualityKey="HD" servers={hdStreams} activeUrl={activeUrl} onSelect={onSelect} />
+      <Section qualityKey="SD" servers={sdStreams} activeUrl={activeUrl} onSelect={onSelect} />
     </div>
   )
 }

@@ -32,19 +32,26 @@ const groupByLeague = (matches) => {
 
 // ─── Status tab bar ───────────────────────────────────────────────────────────
 
+const TAB_COLORS = {
+  live:     { accent: '#00FF87', glow: 'rgba(0,255,135,0.7)',    badge: 'rgba(0,255,135,0.15)'    },
+  soon:     { accent: '#f59e0b', glow: 'rgba(245,158,11,0.7)',   badge: 'rgba(245,158,11,0.15)'   },
+  upcoming: { accent: '#60a5fa', glow: 'rgba(96,165,250,0.7)',   badge: 'rgba(96,165,250,0.15)'   },
+}
+
 const StatusTabs = ({ active, onChange, liveCount, soonCount, upcomingCount }) => {
   const tabs = [
-    { id: 'live',     label: 'Live',     count: liveCount,     dot: true },
-    { id: 'soon',     label: 'Soon',     count: soonCount,     dot: false },
-    { id: 'upcoming', label: 'Upcoming', count: upcomingCount, dot: false },
+    { id: 'live',     label: 'Live',     count: liveCount     },
+    { id: 'soon',     label: 'Soon',     count: soonCount     },
+    { id: 'upcoming', label: 'Upcoming', count: upcomingCount },
   ]
   return (
     <div style={{
       display: 'flex', gap: 4, padding: '10px 16px 0',
       borderBottom: '1px solid rgba(255,255,255,0.07)',
     }}>
-      {tabs.map(({ id, label, count, dot }) => {
+      {tabs.map(({ id, label, count }) => {
         const isActive = active === id
+        const c = TAB_COLORS[id]
         return (
           <button
             key={id}
@@ -54,30 +61,29 @@ const StatusTabs = ({ active, onChange, liveCount, soonCount, upcomingCount }) =
               padding: '8px 14px', fontSize: 13, fontWeight: 700,
               color: isActive ? '#fff' : 'rgba(255,255,255,0.38)',
               position: 'relative',
-              borderBottom: isActive ? '2px solid #00FF87' : '2px solid transparent',
+              borderBottom: isActive ? `2px solid ${c.accent}` : '2px solid transparent',
               marginBottom: -1,
               display: 'flex', alignItems: 'center', gap: 6,
               transition: 'color .15s',
             }}
           >
-            {dot && isActive && (
+            {/* Colored dot for every tab when active */}
+            {isActive && (
               <span style={{
                 width: 7, height: 7, borderRadius: '50%',
-                background: '#00FF87', flexShrink: 0,
-                boxShadow: '0 0 6px #00FF87',
-                animation: 'pulse 1.4s ease-in-out infinite',
+                background: c.accent, flexShrink: 0,
+                boxShadow: `0 0 6px ${c.glow}`,
+                animation: id === 'live' ? 'pulse 1.4s ease-in-out infinite' : 'none',
               }} />
             )}
-            {label}
+            <span style={{ color: isActive ? c.accent : 'rgba(255,255,255,0.38)' }}>
+              {label}
+            </span>
             {count > 0 && (
               <span style={{
                 fontSize: 11, fontWeight: 800,
-                background: isActive
-                  ? (id === 'live' ? 'rgba(0,255,135,0.15)' : 'rgba(255,255,255,0.12)')
-                  : 'rgba(255,255,255,0.07)',
-                color: isActive
-                  ? (id === 'live' ? '#00FF87' : '#fff')
-                  : 'rgba(255,255,255,0.3)',
+                background: isActive ? c.badge : 'rgba(255,255,255,0.07)',
+                color:      isActive ? c.accent : 'rgba(255,255,255,0.3)',
                 borderRadius: 10, padding: '1px 6px', lineHeight: 1.6,
               }}>
                 {count}
@@ -289,7 +295,7 @@ export default function MatchList({ tab }) {
   const { data: matches, isLoading } = useSWR(
     apiUrl.matches(tab),
     fetcher,
-    { refreshInterval: 30000, revalidateOnFocus: true }
+    { refreshInterval: 60000, revalidateOnFocus: false }
   )
 
   const isMultiSource = useMemo(() => {

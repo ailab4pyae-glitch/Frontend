@@ -1,5 +1,5 @@
 'use client'
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import useSWR from 'swr'
 import { fetcher, apiUrl, formatDate, formatTime } from '@/lib/api'
@@ -16,55 +16,67 @@ export default function WatchPage() {
   // Stop stream whenever this page is left — no ref needed, hits the global singleton
   useEffect(() => () => killActiveStream(), [])
 
-  const { data: match }   = useSWR(apiUrl.match(id),   fetcher)
-  const { data: streams } = useSWR(apiUrl.streams(id), fetcher, { refreshInterval: 30000, keepPreviousData: true })
+  const { data: match }   = useSWR(apiUrl.match(id),   fetcher, { refreshInterval: 60000, revalidateOnFocus: false })
+  const { data: streams } = useSWR(apiUrl.streams(id), fetcher, { refreshInterval: 120000, keepPreviousData: true, revalidateOnFocus: false })
 
-  // SD first — default (index 0) plays SD for low-bandwidth users, HD available to switch manually
   const allUrls = useMemo(() => [
     ...((streams?.SD || []).map((s) => s.url)),
     ...((streams?.HD || []).map((s) => s.url)),
   ], [streams])
 
-  const [serverIndex,  setServerIndex]  = useState(0)
+  const [activeUrl,    setActiveUrl]    = useState(null)
   const [allExhausted, setAllExhausted] = useState(false)
-  const activeUrl = allUrls[serverIndex] || null
+  const initializedRef = useRef(false)
+  const allUrlsRef     = useRef([])
 
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(`watch_pref_${id}`)
-      const idx = saved !== null ? parseInt(saved, 10) : 0
-      setServerIndex(isNaN(idx) ? 0 : idx)
-    } catch (_) {
-      setServerIndex(0)
-    }
-  }, [id])
+  const urlBase = (url) => url ? url.split('?')[0] : ''
 
-  // When streams refresh, clamp index and reset exhausted flag (new URLs may be healthy)
+  // Keep allUrlsRef in sync — lets handleError read latest urls without being a dependency
+  useEffect(() => { allUrlsRef.current = allUrls }, [allUrls])
+
+  // When streams load or refresh: keep playing the current URL if it's still in the list.
+  // If only the CDN token changed (same base path), keep the old URL — still valid until
+  // the health check marks it expired. Only switch when the stream is truly gone.
   useEffect(() => {
     if (!allUrls.length) return
-    setServerIndex((prev) => Math.min(prev, allUrls.length - 1))
     setAllExhausted(false)
-  }, [allUrls.length])
+    if (!initializedRef.current) {
+      initializedRef.current = true
+      try {
+        const saved = localStorage.getItem(`watch_url_${id}`)
+        if (saved && allUrls.includes(saved)) { setActiveUrl(saved); return }
+      } catch (_) {}
+      setActiveUrl(allUrls[0])
+    } else {
+      setActiveUrl((prev) => {
+        if (!prev) return allUrls[0]
+        if (allUrls.includes(prev)) return prev
+        const prevBase = urlBase(prev)
+        if (allUrls.some(u => urlBase(u) === prevBase)) return prev
+        return allUrls[0]
+      })
+    }
+  }, [allUrls, id])
 
+  // Stable callback — reads allUrlsRef so allUrls is never a dependency.
+  // This prevents onError prop from changing on every streams refresh,
+  // which would cascade into VideoPlayer's useEffect and restart the stream.
   const handleError = useCallback(() => {
-    setServerIndex((prev) => {
-      const next = prev + 1
-      if (next < allUrls.length) {
-        setAllExhausted(false)
-        return next
-      }
+    setActiveUrl((prev) => {
+      const urls = allUrlsRef.current
+      const idx  = urls.indexOf(prev)
+      const next = urls[idx + 1]
+      if (next) { setAllExhausted(false); return next }
       setAllExhausted(true)
       return prev
     })
-  }, [allUrls.length])
+  }, []) // intentionally empty — stable for VideoPlayer's lifetime
 
   const handleSelect = useCallback((url) => {
-    const idx = allUrls.indexOf(url)
-    if (idx !== -1) {
-      setServerIndex(idx)
-      try { localStorage.setItem(`watch_pref_${id}`, String(idx)) } catch (_) {}
-    }
-  }, [allUrls, id])
+    setActiveUrl(url)
+    setAllExhausted(false)
+    try { localStorage.setItem(`watch_url_${id}`, url) } catch (_) {}
+  }, [id])
 
   return (
     <div style={{ minHeight: '100vh', background: '#0A0E1A' }}>
@@ -152,14 +164,14 @@ export default function WatchPage() {
             display: 'flex', gap: 16,
           }}>
             <div style={{ textAlign: 'center' }}>
-              <p style={{ fontSize: 18, fontWeight: 700, color: '#60a5fa' }}>
+              <p style={{ fontSize: 18, fontWeight: 700, color: '#a78bfa' }}>
                 {streams.SD?.length || 0}
               </p>
               <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>SD</p>
             </div>
             <div style={{ width: 1, background: 'rgba(255,255,255,0.07)' }} />
             <div style={{ textAlign: 'center' }}>
-              <p style={{ fontSize: 18, fontWeight: 700, color: '#00FF87' }}>
+              <p style={{ fontSize: 18, fontWeight: 700, color: '#e879f9' }}>
                 {streams.HD?.length || 0}
               </p>
               <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>HD</p>
@@ -171,12 +183,12 @@ export default function WatchPage() {
               </p>
               <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>Total</p>
             </div>
-            {allUrls.length > 0 && (
+            {activeUrl && allUrls.length > 0 && (
               <>
                 <div style={{ width: 1, background: 'rgba(255,255,255,0.07)' }} />
                 <div style={{ textAlign: 'center' }}>
                   <p style={{ fontSize: 18, fontWeight: 700, color: '#00FF87' }}>
-                    {serverIndex + 1}
+                    {allUrls.indexOf(activeUrl) + 1}
                   </p>
                   <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>Active</p>
                 </div>

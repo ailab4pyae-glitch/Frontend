@@ -32,10 +32,16 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
   const timersRef      = useRef([])
   const loadTimeoutRef = useRef(null)
   const countdownRef   = useRef(null)
-  const mountedRef     = useRef(true)  // false once Plyr cleanup runs (unmounting)
+  const mountedRef      = useRef(true)           // false once Plyr cleanup runs (unmounting)
+  const allExhaustedRef = useRef(allExhausted)   // ref so callbacks stay stable when prop changes
+  const onErrorRef      = useRef(onError)        // ref so callbacks stay stable when prop changes
   const [loading,   setLoading]   = useState(true)
   const [error,     setError]     = useState(false)
-  const [countdown, setCountdown] = useState(null) // null = none, number = switching in Ns
+  const [countdown, setCountdown] = useState(null)
+
+  // Keep refs in sync with latest props — no re-render, no cascade
+  useEffect(() => { allExhaustedRef.current = allExhausted }, [allExhausted])
+  useEffect(() => { onErrorRef.current = onError },           [onError])
 
   const handleRotate = useCallback(async () => {
     const el = videoRef.current
@@ -57,29 +63,31 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
     if (loadTimeoutRef.current) { clearTimeout(loadTimeoutRef.current); loadTimeoutRef.current = null }
   }, [])
 
-  // Final action: move to next server or show error
+  // Final action: move to next server or show error.
+  // Reads allExhaustedRef/onErrorRef so this callback never needs to recreate
+  // when those props change — prevents the streaming useEffect from re-running.
   const switchServer = useCallback(() => {
     clearCountdown()
     clearTimers()
-    if (onError && !allExhausted) {
+    if (onErrorRef.current && !allExhaustedRef.current) {
       setLoading(true)
       setError(false)
-      onError()
+      onErrorRef.current()
     } else {
       setError(true)
       setLoading(false)
     }
-  }, [onError, allExhausted, clearTimers, clearCountdown])
+  }, [clearTimers, clearCountdown]) // stable — no prop dependencies
 
-  // Immediate switch for stalls/timeouts (already delayed by detector)
+  // Immediate switch for stalls/timeouts
   const handleError = useCallback(() => {
     switchServer()
   }, [switchServer])
 
   // Fatal error from HLS/FLV: show 30s countdown, let slow connections recover
   const handleFatalError = useCallback(() => {
-    if (countdownRef.current) return // countdown already running
-    if (allExhausted) { switchServer(); return }
+    if (countdownRef.current) return
+    if (allExhaustedRef.current) { switchServer(); return }
     clearTimers()
     setLoading(false)
     let remaining = SWITCH_DELAY
@@ -92,7 +100,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
         setCountdown(remaining)
       }
     }, 1000)
-  }, [allExhausted, switchServer, clearTimers])
+  }, [switchServer, clearTimers])
 
   const destroyStream = useCallback(() => {
     clearCountdown()
@@ -126,7 +134,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
     const id = setInterval(() => {
       if (video.paused || !video.buffered.length) return
       const bufferedEnd = video.buffered.end(video.buffered.length - 1)
-      if (bufferedEnd - video.currentTime > 8) video.currentTime = bufferedEnd - 1
+      if (bufferedEnd - video.currentTime > 18) video.currentTime = bufferedEnd - 2
     }, 4000)
     timersRef.current.push(id)
   }, [])
@@ -261,16 +269,20 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
         if (Hls.isSupported()) {
           const cfg = isLive
             ? {
-                maxBufferLength:                8,
-                maxMaxBufferLength:             16,
-                liveSyncDurationCount:          2,
-                liveMaxLatencyDurationCount:    6,
-                backBufferLength:               4,
-                manifestLoadingMaxRetry:        1,
-                fragLoadingMaxRetry:            2,
-                manifestLoadingMaxRetryTimeout: 2000,
-                fragLoadingMaxRetryTimeout:     2000,
-                nudgeMaxRetry:                  3,
+                // ~10 s buffer target (5 × ~2 s segments) — enough to absorb CDN jitter
+                // without excessive lag. Max latency 24 s before forced jump to live edge.
+                maxBufferLength:                20,
+                maxMaxBufferLength:             45,
+                liveSyncDurationCount:          5,
+                liveMaxLatencyDurationCount:    12,
+                backBufferLength:               8,
+                manifestLoadingMaxRetry:        4,
+                fragLoadingMaxRetry:            5,
+                manifestLoadingMaxRetryTimeout: 5000,
+                fragLoadingMaxRetryTimeout:     5000,
+                nudgeMaxRetry:                  8,
+                nudgeOffset:                    0.1,
+                lowLatencyMode:                 false,
                 enableWorker:                   true,
               }
             : {
@@ -323,11 +335,10 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
         <iframe
           key={url}
           src={url}
-          style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+          style={{ width: '100%', height: '100%', border: 'none', display: 'block', overflow: 'hidden' }}
           allowFullScreen
           allow="autoplay; encrypted-media; fullscreen"
           referrerPolicy="no-referrer"
-          scrolling="no"
         />
       </div>
     )
