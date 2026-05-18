@@ -4,12 +4,16 @@ import { useRouter, usePathname } from 'next/navigation'
 import { isAuthenticated, clearToken } from '@/lib/auth'
 
 const NAV = [
-  { label: 'Dashboard', href: '/admin',          icon: '📊' },
-  { label: 'Matches',   href: '/admin/matches',  icon: '⚽' },
-  { label: 'TV & Radio',href: '/admin/tv',       icon: '📺' },
-  { label: 'Sources',   href: '/admin/sources',  icon: '🔌' },
-  { label: 'Config',    href: '/admin/config',   icon: '⚙️'  },
-  { label: 'Tests',     href: '/admin/tests',    icon: '🧪' },
+  { label: 'Dashboard',     href: '/admin',                icon: '📊' },
+  { label: 'Matches',       href: '/admin/matches',        icon: '⚽' },
+  { label: 'TV & Radio',    href: '/admin/tv',             icon: '📺' },
+  { label: 'Sources',       href: '/admin/sources',        icon: '🔌' },
+  { label: 'Config',        href: '/admin/config',         icon: '⚙️'  },
+  { label: 'Tests',         href: '/admin/tests',          icon: '🧪' },
+  { label: '─────', href: null, icon: '' },
+  { label: 'Plans',         href: '/admin/subscriptions/plans',        icon: '📦' },
+  { label: 'Members',       href: '/admin/subscriptions/members',      icon: '👥' },
+  { label: 'Transactions',  href: '/admin/subscriptions/transactions', icon: '💳' },
 ]
 
 export default function AdminLayout({ children }) {
@@ -55,6 +59,9 @@ export default function AdminLayout({ children }) {
       {/* Nav */}
       <nav style={{ flex: 1, padding: '12px 10px', display: 'flex', flexDirection: 'column', gap: 2 }}>
         {NAV.map(({ label, href, icon }) => {
+          if (!href) return (
+            <div key={label} style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '6px 4px' }} />
+          )
           const active = pathname === href || (href !== '/admin' && pathname.startsWith(href))
           return (
             <a

@@ -169,10 +169,10 @@ export default function ConfigPage() {
           : <>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
               {[
-                { key: 'appName',    label: 'App Name',       type: 'text',  ph: 'StreamZone' },
-                { key: 'defaultTab', label: 'Default Tab Slug', type: 'text', ph: 'main-live' },
-                { key: 'accentColor', label: 'Accent Color',  type: 'color' },
-                { key: 'bgColor',    label: 'Background Color', type: 'color' },
+                { key: 'appName',      label: 'App Name',          type: 'text',  ph: 'StreamZone' },
+                { key: 'defaultTab',   label: 'Default Tab Slug',  type: 'text',  ph: 'main-live' },
+                { key: 'accentColor',  label: 'Accent Color',      type: 'color' },
+                { key: 'bgColor',      label: 'Background Color',  type: 'color' },
               ].map(({ key, label, type, ph }) => (
                 <div key={key}>
                   <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', fontWeight: 600, textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>
@@ -195,6 +195,52 @@ export default function ConfigPage() {
                   </div>
                 </div>
               ))}
+            </div>
+            {/* Social Links */}
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16, marginBottom: 14 }}>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 12 }}>
+                Telegram
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+                {/* Channel — shown in header as "Join Telegram" */}
+                <div style={{ background: 'rgba(0,136,204,0.06)', border: '1px solid rgba(0,136,204,0.15)', borderRadius: 10, padding: '12px 14px' }}>
+                  <div style={{ fontSize: 11, color: '#29b6f6', fontWeight: 700, marginBottom: 10 }}>
+                    📢 Channel — shown in header (news &amp; updates)
+                  </div>
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <div style={{ flex: 2 }}>
+                      <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', fontWeight: 600, textTransform: 'uppercase', display: 'block', marginBottom: 5 }}>Channel URL</label>
+                      <input type="url" value={ui.telegramUrl || ''}
+                        onChange={(e) => setUi((u) => ({ ...u, telegramUrl: e.target.value }))}
+                        placeholder="https://t.me/yourchannel"
+                        style={input({ fontFamily: 'monospace', fontSize: 13 })} />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', fontWeight: 600, textTransform: 'uppercase', display: 'block', marginBottom: 5 }}>Button Label</label>
+                      <input type="text" value={ui.telegramLabel || ''}
+                        onChange={(e) => setUi((u) => ({ ...u, telegramLabel: e.target.value }))}
+                        placeholder="Join Telegram"
+                        style={input({ fontSize: 13 })} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bot — used for Subscribe button on match cards */}
+                <div style={{ background: 'rgba(0,255,135,0.04)', border: '1px solid rgba(0,255,135,0.12)', borderRadius: 10, padding: '12px 14px' }}>
+                  <div style={{ fontSize: 11, color: '#00FF87', fontWeight: 700, marginBottom: 10 }}>
+                    🤖 Bot — shown on match cards (subscription &amp; payment)
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', fontWeight: 600, textTransform: 'uppercase', display: 'block', marginBottom: 5 }}>Bot URL</label>
+                    <input type="url" value={ui.telegramBotUrl || ''}
+                      onChange={(e) => setUi((u) => ({ ...u, telegramBotUrl: e.target.value }))}
+                      placeholder="https://t.me/yourbot"
+                      style={input({ fontFamily: 'monospace', fontSize: 13 })} />
+                  </div>
+                </div>
+
+              </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <SaveBtn k="ui" />

@@ -242,19 +242,22 @@ export default function MatchCard({ match, multiSource = false }) {
           )}
         </div>
 
-        <span style={{
-          display: 'inline-flex', alignItems: 'center', gap: 4,
-          fontSize: 12, fontWeight: 700,
-          color: isLive ? '#00FF87' : soon ? '#f59e0b' : 'rgba(255,255,255,0.35)',
-          padding: '5px 12px', borderRadius: 20,
-          background: isLive
-            ? 'rgba(0,255,135,0.1)'
-            : soon ? 'rgba(245,158,11,0.08)' : 'rgba(255,255,255,0.04)',
-          border: `1px solid ${isLive ? 'rgba(0,255,135,0.2)' : soon ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.06)'}`,
-        }}>
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-          {isLive ? 'Watch' : isFinished ? 'Replay' : soon ? 'Soon' : 'Upcoming'}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            fontSize: 12, fontWeight: 700,
+            color: isLive ? '#00FF87' : soon ? '#f59e0b' : 'rgba(255,255,255,0.35)',
+            padding: '5px 12px', borderRadius: 20,
+            background: isLive
+              ? 'rgba(0,255,135,0.1)'
+              : soon ? 'rgba(245,158,11,0.08)' : 'rgba(255,255,255,0.04)',
+            border: `1px solid ${isLive ? 'rgba(0,255,135,0.2)' : soon ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.06)'}`,
+          }}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            {isLive ? 'Watch' : isFinished ? 'Replay' : soon ? 'Soon' : 'Upcoming'}
+          </span>
+        </div>
+
       </div>
     </div>
   )
