@@ -33,9 +33,9 @@ const groupByLeague = (matches) => {
 // ─── Status tab bar ───────────────────────────────────────────────────────────
 
 const TAB_COLORS = {
-  live:     { accent: '#00FF87', glow: 'rgba(0,255,135,0.7)',    badge: 'rgba(0,255,135,0.15)'    },
-  soon:     { accent: '#f59e0b', glow: 'rgba(245,158,11,0.7)',   badge: 'rgba(245,158,11,0.15)'   },
-  upcoming: { accent: '#60a5fa', glow: 'rgba(96,165,250,0.7)',   badge: 'rgba(96,165,250,0.15)'   },
+  live:     { bg: 'rgba(255,200,0,0.18)',   border: '#FFD700', text: '#FFD700', dot: '#FFD700', dotGlow: 'rgba(255,215,0,0.8)',  badgeBg: 'rgba(255,215,0,0.25)',  badgeText: '#FFD700' },
+  soon:     { bg: 'rgba(168,85,247,0.15)',  border: '#a855f7', text: '#c084fc', dot: '#a855f7', dotGlow: 'rgba(168,85,247,0.7)', badgeBg: 'rgba(168,85,247,0.25)', badgeText: '#c084fc' },
+  upcoming: { bg: 'rgba(168,85,247,0.15)',  border: '#a855f7', text: '#c084fc', dot: '#a855f7', dotGlow: 'rgba(168,85,247,0.7)', badgeBg: 'rgba(168,85,247,0.25)', badgeText: '#c084fc' },
 }
 
 const StatusTabs = ({ active, onChange, liveCount, soonCount, upcomingCount }) => {
@@ -46,7 +46,7 @@ const StatusTabs = ({ active, onChange, liveCount, soonCount, upcomingCount }) =
   ]
   return (
     <div style={{
-      display: 'flex', gap: 4, padding: '10px 16px 0',
+      display: 'flex', gap: 8, padding: '12px 16px',
       borderBottom: '1px solid rgba(255,255,255,0.07)',
     }}>
       {tabs.map(({ id, label, count }) => {
@@ -57,33 +57,31 @@ const StatusTabs = ({ active, onChange, liveCount, soonCount, upcomingCount }) =
             key={id}
             onClick={() => onChange(id)}
             style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              padding: '8px 14px', fontSize: 13, fontWeight: 700,
-              color: isActive ? '#fff' : 'rgba(255,255,255,0.38)',
-              position: 'relative',
-              borderBottom: isActive ? `2px solid ${c.accent}` : '2px solid transparent',
-              marginBottom: -1,
+              background:   isActive ? c.bg   : 'rgba(255,255,255,0.05)',
+              border:       `1px solid ${isActive ? c.border : 'rgba(255,255,255,0.1)'}`,
+              borderRadius: 20,
+              cursor: 'pointer',
+              padding: '6px 14px', fontSize: 13, fontWeight: 700,
               display: 'flex', alignItems: 'center', gap: 6,
-              transition: 'color .15s',
+              transition: 'all .15s',
             }}
           >
-            {/* Colored dot for every tab when active */}
-            {isActive && (
+            {id === 'live' && isActive && (
               <span style={{
                 width: 7, height: 7, borderRadius: '50%',
-                background: c.accent, flexShrink: 0,
-                boxShadow: `0 0 6px ${c.glow}`,
-                animation: id === 'live' ? 'pulse 1.4s ease-in-out infinite' : 'none',
+                background: c.dot, flexShrink: 0,
+                boxShadow: `0 0 6px ${c.dotGlow}`,
+                animation: 'pulse 1.4s ease-in-out infinite',
               }} />
             )}
-            <span style={{ color: isActive ? c.accent : 'rgba(255,255,255,0.38)' }}>
+            <span style={{ color: isActive ? c.text : 'rgba(255,255,255,0.38)' }}>
               {label}
             </span>
             {count > 0 && (
               <span style={{
                 fontSize: 11, fontWeight: 800,
-                background: isActive ? c.badge : 'rgba(255,255,255,0.07)',
-                color:      isActive ? c.accent : 'rgba(255,255,255,0.3)',
+                background: isActive ? c.badgeBg : 'rgba(255,255,255,0.07)',
+                color:      isActive ? c.badgeText : 'rgba(255,255,255,0.3)',
                 borderRadius: 10, padding: '1px 6px', lineHeight: 1.6,
               }}>
                 {count}

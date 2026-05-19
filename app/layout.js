@@ -5,6 +5,12 @@ const SITE_NAME = process.env.NEXT_PUBLIC_SITE_NAME || 'ThaeGyiKoneThuLay'
 const SITE_DESC = process.env.NEXT_PUBLIC_SITE_DESC || 'Watch live football, basketball and sports matches free online'
 const ADSENSE_ID = process.env.NEXT_PUBLIC_ADSENSE_ID || ''
 
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+}
+
 export const metadata = {
   title: {
     default:  `${SITE_NAME} – Live Sports`,

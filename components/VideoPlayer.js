@@ -245,8 +245,8 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
           { type: 'flv', url, isLive, cors: true, withCredentials: false },
           {
             enableWorker:             true,
-            enableStashBuffer:        !isLive,
-            stashInitialSize:         isLive ? 384 : (tier === 'slow' ? 1024 : 512),
+            enableStashBuffer:        false,
+            stashInitialSize:         128,
             lazyLoad:                 false,
             deferLoadAfterSourceOpen: false,
           }
@@ -271,16 +271,16 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
             ? {
                 // ~10 s buffer target (5 × ~2 s segments) — enough to absorb CDN jitter
                 // without excessive lag. Max latency 24 s before forced jump to live edge.
-                maxBufferLength:                20,
-                maxMaxBufferLength:             45,
-                liveSyncDurationCount:          5,
-                liveMaxLatencyDurationCount:    12,
-                backBufferLength:               8,
-                manifestLoadingMaxRetry:        4,
-                fragLoadingMaxRetry:            5,
-                manifestLoadingMaxRetryTimeout: 5000,
-                fragLoadingMaxRetryTimeout:     5000,
-                nudgeMaxRetry:                  8,
+                maxBufferLength:                10,
+                maxMaxBufferLength:             20,
+                liveSyncDurationCount:          2,
+                liveMaxLatencyDurationCount:    6,
+                backBufferLength:               4,
+                manifestLoadingMaxRetry:        3,
+                fragLoadingMaxRetry:            3,
+                manifestLoadingMaxRetryTimeout: 3000,
+                fragLoadingMaxRetryTimeout:     3000,
+                nudgeMaxRetry:                  5,
                 nudgeOffset:                    0.1,
                 lowLatencyMode:                 false,
                 enableWorker:                   true,
