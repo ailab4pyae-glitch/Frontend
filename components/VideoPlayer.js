@@ -32,9 +32,9 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
   const timersRef      = useRef([])
   const loadTimeoutRef = useRef(null)
   const countdownRef   = useRef(null)
-  const mountedRef      = useRef(true)           // false once Plyr cleanup runs (unmounting)
-  const allExhaustedRef = useRef(allExhausted)   // ref so callbacks stay stable when prop changes
-  const onErrorRef      = useRef(onError)        // ref so callbacks stay stable when prop changes
+  const mountedRef      = useRef(true)
+  const allExhaustedRef = useRef(allExhausted)
+  const onErrorRef      = useRef(onError)
   const [loading,   setLoading]   = useState(true)
   const [error,     setError]     = useState(false)
   const [countdown, setCountdown] = useState(null)
@@ -44,11 +44,26 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
   useEffect(() => { onErrorRef.current = onError },           [onError])
 
   const handleRotate = useCallback(async () => {
-    const el = videoRef.current
-    if (!el) return
+    const video     = videoRef.current
+    const container = containerRef.current
+    if (!video && !container) return
+
     try {
-      await el.requestFullscreen()
-      if (screen.orientation?.lock) await screen.orientation.lock('landscape').catch(() => {})
+      // iOS Safari: video element has webkitEnterFullscreen (native landscape)
+      if (video?.webkitEnterFullscreen) {
+        video.webkitEnterFullscreen()
+        return
+      }
+      // Standard fullscreen on container (Android Chrome, desktop)
+      const target = container ?? video
+      if (target.requestFullscreen)       await target.requestFullscreen()
+      else if (target.webkitRequestFullscreen) target.webkitRequestFullscreen()
+      else if (target.mozRequestFullScreen)    target.mozRequestFullScreen()
+
+      // Lock orientation to landscape (Android Chrome — silently ignored on iOS)
+      if (screen.orientation?.lock) {
+        screen.orientation.lock('landscape').catch(() => {})
+      }
     } catch (_) {}
   }, [])
 
@@ -129,12 +144,16 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
     timersRef.current.push(id)
   }, [handleError])
 
-  // Live catchup — if lag > 8s behind buffered end, jump to live edge
+  // Live catchup — jump to live edge if lag exceeds threshold.
+  // Slow networks tolerate more lag before jumping (larger buffer = intentional delay).
   const startLiveCatchup = useCallback((video) => {
+    const tier = getNetworkTier()
+    const maxLag  = tier === 'slow' ? 35 : tier === 'medium' ? 25 : 18
+    const jumpTo  = tier === 'slow' ? 4  : 2
     const id = setInterval(() => {
       if (video.paused || !video.buffered.length) return
       const bufferedEnd = video.buffered.end(video.buffered.length - 1)
-      if (bufferedEnd - video.currentTime > 18) video.currentTime = bufferedEnd - 2
+      if (bufferedEnd - video.currentTime > maxLag) video.currentTime = bufferedEnd - jumpTo
     }, 4000)
     timersRef.current.push(id)
   }, [])
@@ -269,18 +288,19 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
         if (Hls.isSupported()) {
           const cfg = isLive
             ? {
-                // ~10 s buffer target (5 × ~2 s segments) — enough to absorb CDN jitter
-                // without excessive lag. Max latency 24 s before forced jump to live edge.
-                maxBufferLength:                10,
-                maxMaxBufferLength:             20,
+                // Slow networks need more buffer to absorb CDN jitter (at the cost of more delay).
+                // Fast networks keep delay low. Medium is a middle ground.
                 liveSyncDurationCount:          2,
-                liveMaxLatencyDurationCount:    6,
-                backBufferLength:               4,
-                manifestLoadingMaxRetry:        3,
-                fragLoadingMaxRetry:            3,
-                manifestLoadingMaxRetryTimeout: 3000,
-                fragLoadingMaxRetryTimeout:     3000,
-                nudgeMaxRetry:                  5,
+                liveMaxLatencyDurationCount:    tier === 'slow' ? 8 : tier === 'medium' ? 5 : 3,
+                maxBufferLength:                tier === 'slow' ? 20  : tier === 'medium' ? 14 : 10,
+                maxMaxBufferLength:             tier === 'slow' ? 40  : tier === 'medium' ? 28 : 20,
+                backBufferLength:               tier === 'slow' ? 8   : 4,
+                startFragPrefetch:              true,
+                manifestLoadingMaxRetry:        tier === 'slow' ? 5   : 3,
+                fragLoadingMaxRetry:            tier === 'slow' ? 5   : 3,
+                manifestLoadingMaxRetryTimeout: tier === 'slow' ? 6000 : 3000,
+                fragLoadingMaxRetryTimeout:     tier === 'slow' ? 6000 : 3000,
+                nudgeMaxRetry:                  tier === 'slow' ? 8   : 5,
                 nudgeOffset:                    0.1,
                 lowLatencyMode:                 false,
                 enableWorker:                   true,

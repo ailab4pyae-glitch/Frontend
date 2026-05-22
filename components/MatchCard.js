@@ -23,7 +23,7 @@ const localDate = (iso) => {
   return new Date(iso).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
 }
 
-export default function MatchCard({ match, multiSource = false }) {
+export default function MatchCard({ match, multiSource = false, fromTab = '' }) {
   const router         = useRouter()
   const { tabMap }  = useConfig()
   const sourceTab   = tabMap[match.source_tab]
@@ -42,7 +42,7 @@ export default function MatchCard({ match, multiSource = false }) {
   return (
     <div
       className="fade-in"
-      onClick={() => router.push(`/watch/${match.id}`)}
+      onClick={() => router.push(`/watch/${match.id}${fromTab ? `?from=${fromTab}` : ''}`)}
       style={{
         background: isLive
           ? 'linear-gradient(145deg, #141824 0%, #1a1228 100%)'

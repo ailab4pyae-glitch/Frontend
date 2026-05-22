@@ -26,7 +26,12 @@ const groupByLeague = (matches) => {
     })
     .map(([league, ms]) => [
       league,
-      ms.slice().sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at)),
+      ms.slice().sort((a, b) => {
+        // live always floats to top within each league
+        if (a.status === 'live' && b.status !== 'live') return -1
+        if (a.status !== 'live' && b.status === 'live') return 1
+        return new Date(a.scheduled_at) - new Date(b.scheduled_at)
+      }),
     ])
 }
 
@@ -226,7 +231,7 @@ const MobileSheet = ({ leagues, active, onChange, onClose }) => (
 
 // ─── League section in match list ─────────────────────────────────────────────
 
-const LeagueSection = ({ league, matches, isMultiSource }) => {
+const LeagueSection = ({ league, matches, isMultiSource, fromTab }) => {
   const icon = leagueIcon(league)
   const fame = leagueFame(league)
   const hot  = fame <= 8
@@ -254,7 +259,7 @@ const LeagueSection = ({ league, matches, isMultiSource }) => {
         )}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {matches.map((m) => <MatchCard key={m.id} match={m} multiSource={isMultiSource(m)} />)}
+        {matches.map((m) => <MatchCard key={m.id} match={m} multiSource={isMultiSource(m)} fromTab={fromTab} />)}
       </div>
     </div>
   )
@@ -277,6 +282,7 @@ const EmptyTab = ({ statusTab, hasSearch, search }) => (
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function MatchList({ tab }) {
+  const isMainTab = tab === 'main-live'
   const [statusTab,    setStatusTab]    = useState('live')
   const [leagueFilter, setLeagueFilter] = useState(null)
   const [search,       setSearch]       = useState('')
@@ -323,8 +329,10 @@ export default function MatchList({ tab }) {
     }
   }, [matches]) // eslint-disable-line
 
-  // Matches for active tab
-  const tabMatches = statusTab === 'live' ? allLive : statusTab === 'soon' ? allSoon : allUpcoming
+  // main-live: hot matches only (leagueFame ≤ 25), all statuses, no tab bar
+  const tabMatches = isMainTab
+    ? nonFinished.filter((m) => leagueFame(leagueKey(m)) <= 25)
+    : statusTab === 'live' ? allLive : statusTab === 'soon' ? allSoon : allUpcoming
 
   // League options for sidebar (from tab matches, unfiltered by league/search)
   const leagueOptions = useMemo(() => {
@@ -373,7 +381,7 @@ export default function MatchList({ tab }) {
   if (!Array.isArray(matches) || nonFinished.length === 0) {
     return (
       <div>
-        <StatusTabs active={statusTab} onChange={handleStatusChange} liveCount={0} soonCount={0} upcomingCount={0} />
+        {!isMainTab && <StatusTabs active={statusTab} onChange={handleStatusChange} liveCount={0} soonCount={0} upcomingCount={0} />}
         <EmptyTab statusTab={statusTab} hasSearch={false} search="" />
       </div>
     )
@@ -382,14 +390,16 @@ export default function MatchList({ tab }) {
   return (
     <div style={{ paddingBottom: 80 }}>
 
-      {/* Status tabs */}
-      <StatusTabs
-        active={statusTab}
-        onChange={handleStatusChange}
-        liveCount={allLive.length}
-        soonCount={allSoon.length}
-        upcomingCount={allUpcoming.length}
-      />
+      {/* Status tabs — hidden for main-live */}
+      {!isMainTab && (
+        <StatusTabs
+          active={statusTab}
+          onChange={handleStatusChange}
+          liveCount={allLive.length}
+          soonCount={allSoon.length}
+          upcomingCount={allUpcoming.length}
+        />
+      )}
 
       {/* Search + layout */}
       <div style={{ display: 'flex', alignItems: 'stretch' }}>
@@ -456,7 +466,7 @@ export default function MatchList({ tab }) {
               <EmptyTab statusTab={statusTab} hasSearch={!!q || !!leagueFilter} search={search} />
             ) : (
               groups.map(([league, ms]) => (
-                <LeagueSection key={league} league={league} matches={ms} isMultiSource={isMultiSource} />
+                <LeagueSection key={league} league={league} matches={ms} isMultiSource={isMultiSource} fromTab={tab} />
               ))
             )}
           </div>
