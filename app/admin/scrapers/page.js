@@ -151,7 +151,7 @@ function ScraperCard({ slug, name, driver }) {
   const setFrom = (v) => setCfg((c) => ({ ...c, active_hours: { from: v, to: toVal } }))
   const setTo   = (v) => setCfg((c) => ({ ...c, active_hours: { from: fromVal, to: v } }))
   const setAlways = (v) => setCfg((c) => ({ ...c, active_hours: v ? null : { from: '06:00', to: '23:00' } }))
-  const setInterval = (ms) => setCfg((c) => ({ ...c, sync_interval_ms: ms }))
+  const setSyncInterval = (ms) => setCfg((c) => ({ ...c, sync_interval_ms: ms }))
 
   const isRunning = running || state?.running
 
@@ -268,7 +268,7 @@ function ScraperCard({ slug, name, driver }) {
           {/* Quick-pick chips */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
             {INTERVALS.map(({ label, ms }) => (
-              <button key={ms} onClick={() => setInterval(ms)} style={{
+              <button key={ms} onClick={() => setSyncInterval(ms)} style={{
                 border: `1px solid ${intervalMs === ms ? 'rgba(0,255,135,0.5)' : 'rgba(255,255,255,0.1)'}`,
                 borderRadius: 20, padding: '5px 14px', fontSize: 12, fontWeight: 600,
                 background: intervalMs === ms ? 'rgba(0,255,135,0.12)' : 'rgba(255,255,255,0.04)',
@@ -283,7 +283,7 @@ function ScraperCard({ slug, name, driver }) {
             <input
               type="number" min="1" step="1"
               value={intervalMin}
-              onChange={(e) => setInterval(Math.max(1, parseInt(e.target.value) || 1) * 60_000)}
+              onChange={(e) => setSyncInterval(Math.max(1, parseInt(e.target.value) || 1) * 60_000)}
               style={inp({ maxWidth: 80, fontSize: 13 })}
             />
             <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>minutes</span>

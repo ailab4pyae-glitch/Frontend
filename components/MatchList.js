@@ -299,7 +299,7 @@ export default function MatchList({ tab }) {
   const { data: matches, isLoading } = useSWR(
     apiUrl.matches(tab),
     fetcher,
-    { refreshInterval: 60000, revalidateOnFocus: false }
+    { refreshInterval: 60000, revalidateOnFocus: false, dedupingInterval: 30000 }
   )
 
   const isMultiSource = useMemo(() => {
@@ -311,14 +311,19 @@ export default function MatchList({ tab }) {
     return (m) => counts[matchKey(m)] > 1
   }, [matches])
 
-  const nonFinished = useMemo(() =>
-    Array.isArray(matches) ? matches.filter((m) => m.status !== 'finished') : []
-  , [matches])
-
-  // Counts for tab labels (unfiltered)
-  const allLive     = useMemo(() => nonFinished.filter((m) => m.status === 'live'), [nonFinished])
-  const allSoon     = useMemo(() => nonFinished.filter((m) => m.status !== 'live' && isSoon(m.scheduled_at)), [nonFinished])
-  const allUpcoming = useMemo(() => nonFinished.filter((m) => m.status !== 'live' && !isSoon(m.scheduled_at)), [nonFinished])
+  // Single pass: partition matches into live / soon / upcoming
+  const { nonFinished, allLive, allSoon, allUpcoming } = useMemo(() => {
+    if (!Array.isArray(matches)) return { nonFinished: [], allLive: [], allSoon: [], allUpcoming: [] }
+    const nonFinished = [], allLive = [], allSoon = [], allUpcoming = []
+    for (const m of matches) {
+      if (m.status === 'finished') continue
+      nonFinished.push(m)
+      if (m.status === 'live') { allLive.push(m); continue }
+      if (isSoon(m.scheduled_at)) allSoon.push(m)
+      else allUpcoming.push(m)
+    }
+    return { nonFinished, allLive, allSoon, allUpcoming }
+  }, [matches])
 
   // Auto-switch: if live is empty on mount, go to soon or upcoming
   useEffect(() => {
@@ -329,9 +334,9 @@ export default function MatchList({ tab }) {
     }
   }, [matches]) // eslint-disable-line
 
-  // main-live: hot matches only (leagueFame ≤ 25), all statuses, no tab bar
+  // main-live: manually-added matches always show; scraped ones filtered to hot leagues (fame ≤ 25)
   const tabMatches = isMainTab
-    ? nonFinished.filter((m) => leagueFame(leagueKey(m)) <= 25)
+    ? nonFinished.filter((m) => m.source_tab === 'main-live' || leagueFame(leagueKey(m)) <= 25)
     : statusTab === 'live' ? allLive : statusTab === 'soon' ? allSoon : allUpcoming
 
   // League options for sidebar (from tab matches, unfiltered by league/search)

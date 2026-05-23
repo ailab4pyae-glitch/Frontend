@@ -5,7 +5,7 @@ import useSWR from 'swr'
 import { fetcher, apiUrl, formatDate, formatTime } from '@/lib/api'
 import { killActiveStream } from '@/lib/player'
 import { useConfig } from '@/lib/config'
-import { useAuth } from '@/lib/useAuth'
+import { useAuth, getToken } from '@/lib/useAuth'
 import LiveBadge from '@/components/LiveBadge'
 import VideoPlayer from '@/components/VideoPlayer'
 import ServerSelector from '@/components/ServerSelector'
@@ -24,7 +24,9 @@ export default function WatchPage() {
   const { auth }    = useAuth()
   const isPremium   = auth?.is_premium === true
   const { data: match }                      = useSWR(apiUrl.match(id),   fetcher, { refreshInterval: 60000, revalidateOnFocus: false })
-  const { data: streams, isLoading: streamsLoading } = useSWR(apiUrl.streams(id), fetcher, { refreshInterval: 120000, keepPreviousData: true, revalidateOnFocus: false })
+  const token = getToken()
+  const streamsUrl = token ? `${apiUrl.streams(id)}?token=${token}` : apiUrl.streams(id)
+  const { data: streams, isLoading: streamsLoading } = useSWR(streamsUrl, fetcher, { refreshInterval: 120000, keepPreviousData: true, revalidateOnFocus: false })
 
   const allUrls = useMemo(() => [
     ...((streams?.SD || []).map((s) => s.url)),

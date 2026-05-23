@@ -1,4 +1,5 @@
 'use client'
+import { memo } from 'react'
 import { useRouter } from 'next/navigation'
 import LiveBadge from './LiveBadge'
 import { proxyLogo, isSoon } from '../lib/api'
@@ -23,7 +24,7 @@ const localDate = (iso) => {
   return new Date(iso).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
 }
 
-export default function MatchCard({ match, multiSource = false, fromTab = '' }) {
+function MatchCard({ match, multiSource = false, fromTab = '' }) {
   const router         = useRouter()
   const { tabMap }  = useConfig()
   const sourceTab   = tabMap[match.source_tab]
@@ -36,7 +37,6 @@ export default function MatchCard({ match, multiSource = false, fromTab = '' }) 
   const icon       = leagueIcon(league)
   const timeStr    = localTime(match.scheduled_at)
   const dateStr    = localDate(match.scheduled_at)
-
   const hasScore     = match.score_home != null && match.score_away != null
 
   return (
@@ -262,3 +262,5 @@ export default function MatchCard({ match, multiSource = false, fromTab = '' }) 
     </div>
   )
 }
+
+export default memo(MatchCard)

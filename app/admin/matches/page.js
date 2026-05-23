@@ -72,8 +72,82 @@ const btn = (variant = 'primary', extra = {}) => ({
   ...extra,
 })
 
-const EMPTY_MATCH = { tab_slug: '', home_team: '', away_team: '', league: '', status: 'scheduled', scheduled_at: '' }
+const EMPTY_MATCH = { tab_slug: '', home_team: '', away_team: '', home_logo: '', away_logo: '', league: '', status: 'scheduled', scheduled_at: '' }
 const EMPTY_STREAM = { url: '', quality: 'SD' }
+
+// ─── TeamInput — team name field with auto logo lookup + preview ──────────────
+function TeamInput({ label, nameValue, logoValue, onNameChange, onLogoChange }) {
+  const [fetching, setFetching] = useState(false)
+  const [imgErr,   setImgErr]   = useState(false)
+
+  const fetchLogo = async (name) => {
+    if (!name?.trim()) return
+    setFetching(true)
+    try {
+      const data = await adminFetch(`/api/admin/teams/logo?name=${encodeURIComponent(name.trim())}`)
+      if (data?.logo_url) { onLogoChange(data.logo_url); setImgErr(false) }
+    } catch (_) {}
+    finally { setFetching(false) }
+  }
+
+  const proxyUrl = logoValue
+    ? `${BASE}/api/proxy/logo?url=${encodeURIComponent(logoValue)}`
+    : null
+
+  const initials = (nameValue || '?').slice(0, 2).toUpperCase()
+
+  return (
+    <div>
+      <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', fontWeight: 600, textTransform: 'uppercase' }}>{label} *</label>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+        {/* Logo preview */}
+        <div style={{
+          width: 38, height: 38, borderRadius: 8, flexShrink: 0, overflow: 'hidden',
+          background: 'rgba(0,255,135,0.08)', border: '1px solid rgba(0,255,135,0.15)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          {proxyUrl && !imgErr
+            ? <img src={proxyUrl} alt={nameValue} onError={() => setImgErr(true)}
+                style={{ width: 36, height: 36, objectFit: 'contain' }} />
+            : <span style={{ fontSize: 11, fontWeight: 700, color: '#00FF87' }}>{initials}</span>
+          }
+        </div>
+
+        {/* Name input */}
+        <input
+          value={nameValue}
+          onChange={(e) => { onNameChange(e.target.value); setImgErr(false) }}
+          onBlur={(e) => { if (!logoValue) fetchLogo(e.target.value) }}
+          placeholder={`${label} name`}
+          style={input({ flex: 1 })}
+          required
+        />
+
+        {/* Refresh logo button */}
+        <button
+          type="button"
+          onClick={() => fetchLogo(nameValue)}
+          disabled={fetching || !nameValue}
+          title="Auto-fetch logo"
+          style={{
+            border: 'none', borderRadius: 8, padding: '9px 10px', flexShrink: 0,
+            background: fetching ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.07)',
+            color: fetching ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.5)',
+            cursor: fetching || !nameValue ? 'not-allowed' : 'pointer', fontSize: 14,
+          }}
+        >{fetching ? '…' : '🔍'}</button>
+      </div>
+
+      {/* Optional manual logo URL */}
+      <input
+        value={logoValue}
+        onChange={(e) => { onLogoChange(e.target.value); setImgErr(false) }}
+        placeholder="Logo URL (auto-filled or paste manually)"
+        style={input({ marginTop: 6, fontSize: 12, color: 'rgba(255,255,255,0.5)' })}
+      />
+    </div>
+  )
+}
 
 // ─── MatchRow ─────────────────────────────────────────────────────────────────
 function MatchRow({ match, onDelete, onStreamAdded }) {
@@ -303,14 +377,20 @@ export default function MatchesPage() {
               <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', fontWeight: 600, textTransform: 'uppercase' }}>League</label>
               <input value={form.league} onChange={(e) => setForm({ ...form, league: e.target.value })} placeholder="e.g. Premier League" style={input({ marginTop: 4 })} />
             </div>
-            <div>
-              <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', fontWeight: 600, textTransform: 'uppercase' }}>Home Team *</label>
-              <input value={form.home_team} onChange={(e) => setForm({ ...form, home_team: e.target.value })} placeholder="Home team" style={input({ marginTop: 4 })} required />
-            </div>
-            <div>
-              <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', fontWeight: 600, textTransform: 'uppercase' }}>Away Team *</label>
-              <input value={form.away_team} onChange={(e) => setForm({ ...form, away_team: e.target.value })} placeholder="Away team" style={input({ marginTop: 4 })} required />
-            </div>
+            <TeamInput
+              label="Home Team"
+              nameValue={form.home_team}
+              logoValue={form.home_logo}
+              onNameChange={(v) => setForm((f) => ({ ...f, home_team: v }))}
+              onLogoChange={(v) => setForm((f) => ({ ...f, home_logo: v }))}
+            />
+            <TeamInput
+              label="Away Team"
+              nameValue={form.away_team}
+              logoValue={form.away_logo}
+              onNameChange={(v) => setForm((f) => ({ ...f, away_team: v }))}
+              onLogoChange={(v) => setForm((f) => ({ ...f, away_logo: v }))}
+            />
             <div>
               <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', fontWeight: 600, textTransform: 'uppercase' }}>Status</label>
               <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} style={input({ marginTop: 4, cursor: 'pointer' })}>

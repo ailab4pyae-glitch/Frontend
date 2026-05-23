@@ -391,88 +391,6 @@ function UrlList({ items, onChange }) {
   )
 }
 
-function ActiveHoursConfig({ config, onChange }) {
-  const hours  = config?.active_hours
-  const always = !hours?.from || !hours?.to
-  const from   = hours?.from ?? '06:00'
-  const to     = hours?.to   ?? '23:00'
-
-  const set = (patch) => onChange({ ...config, active_hours: { from, to, ...patch } })
-  const clear = () => {
-    const next = { ...config }
-    delete next.active_hours
-    onChange(next)
-  }
-
-  const overnight = !always && from >= to
-  const hint = always
-    ? 'No restriction — scraper runs on every tick 24/7.'
-    : overnight
-      ? `Runs from ${from} → midnight → ${to} (overnight). Skipped between ${to} and ${from}.`
-      : `Runs between ${from} and ${to}. Skipped outside this window to save server & Redis usage.`
-
-  return (
-    <div style={{
-      marginTop: 4,
-      padding: '14px 16px',
-      borderRadius: 10,
-      background: 'rgba(0,0,0,0.2)',
-      border: '1px solid rgba(255,255,255,0.07)',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: always ? 0 : 14 }}>
-        <div>
-          <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: .5 }}>
-            Active Hours
-          </span>
-          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', marginLeft: 8 }}>
-            scraper skips ticks outside this window
-          </span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 12, color: always ? '#00FF87' : 'rgba(255,255,255,0.35)', fontWeight: 600 }}>
-            {always ? '24/7' : 'Restricted'}
-          </span>
-          <Toggle on={always} onChange={(v) => v ? clear() : set({})} size={36} />
-        </div>
-      </div>
-
-      {!always && (
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
-          <div>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginBottom: 4 }}>Run from</div>
-            <input
-              type="time" value={from}
-              onChange={(e) => set({ from: e.target.value })}
-              style={inp({ maxWidth: 130, colorScheme: 'dark' })}
-            />
-          </div>
-          <div style={{ color: 'rgba(255,255,255,0.2)', fontSize: 16, paddingBottom: 10 }}>→</div>
-          <div>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginBottom: 4 }}>Until</div>
-            <input
-              type="time" value={to}
-              onChange={(e) => set({ to: e.target.value })}
-              style={inp({ maxWidth: 130, colorScheme: 'dark' })}
-            />
-          </div>
-          {overnight && (
-            <span style={{
-              fontSize: 11, padding: '4px 10px', borderRadius: 20, fontWeight: 600,
-              background: 'rgba(245,158,11,0.1)', color: '#f59e0b',
-              border: '1px solid rgba(245,158,11,0.25)', marginBottom: 2,
-            }}>
-              Overnight
-            </span>
-          )}
-        </div>
-      )}
-
-      <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)', margin: always ? '6px 0 0' : '10px 0 0' }}>
-        {hint}
-      </p>
-    </div>
-  )
-}
 
 function SourceCard({ src, saving, saved, onSave }) {
   const rawUrls    = Array.isArray(src.config?.base_urls) ? normaliseUrls(src.config.base_urls) : null
@@ -559,26 +477,6 @@ function SourceCard({ src, saving, saved, onSave }) {
           </>
         )}
 
-        {/* Sync interval */}
-        {config.sync_interval_ms !== undefined && (
-          <div>
-            <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5, display: 'block', marginBottom: 6 }}>
-              Sync Interval (ms)
-            </label>
-            <input
-              type="number" min="60000" step="60000"
-              value={config.sync_interval_ms}
-              onChange={(e) => setConfig((c) => ({ ...c, sync_interval_ms: +e.target.value }))}
-              style={inp({ maxWidth: 180 })}
-            />
-            <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12, marginLeft: 10 }}>
-              = {Math.round(config.sync_interval_ms / 60000)} min
-            </span>
-          </div>
-        )}
-
-        {/* Active hours */}
-        <ActiveHoursConfig config={config} onChange={setConfig} />
       </div>
 
       {/* Save + Run Now */}
