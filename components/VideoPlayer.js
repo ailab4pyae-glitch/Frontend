@@ -11,9 +11,9 @@ const getNetworkTier = () => {
   if (typeof navigator === 'undefined') return 'medium'
   const c = navigator.connection || navigator.mozConnection || navigator.webkitConnection
   if (!c) return 'medium'
+  if (c.effectiveType === 'slow-2g' || c.effectiveType === '2g' || c.downlink < 0.8) return 'slow'
+  if (c.effectiveType === '3g' || c.downlink < 2.5) return 'slow'
   if (c.effectiveType === '4g' && c.downlink > 4) return 'fast'
-  if (c.effectiveType === 'slow-2g' || c.effectiveType === '2g' || c.downlink < 1) return 'slow'
-  if (c.effectiveType === '3g' || c.downlink < 2) return 'slow'
   return 'medium'
 }
 
@@ -121,7 +121,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
     clearCountdown()
     clearTimers()
     const video = videoRef.current
-    if (video) { try { video.pause(); video.src = '' } catch (_) {} }
+    if (video) { try { video.playbackRate = 1.0; video.pause(); video.src = '' } catch (_) {} }
     if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null }
     if (flvRef.current) {
       try { flvRef.current.unload(); flvRef.current.detachMediaElement(); flvRef.current.destroy() } catch (_) {}
@@ -129,13 +129,16 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
     }
   }, [clearTimers, clearCountdown])
 
-  // Stall detector — if currentTime doesn't move for 8 × 5s = 40s → switch
+  // Stall detector — slow networks buffer longer before we declare a stall
+  // slow: 14×5s=70s  medium: 10×5s=50s  fast: 8×5s=40s
   const startStallDetector = useCallback((video) => {
+    const tier      = getNetworkTier()
+    const threshold = tier === 'slow' ? 14 : tier === 'medium' ? 10 : 8
     let lastTime = -1, stallCount = 0
     const id = setInterval(() => {
       if (video.paused || video.ended) return
       if (video.currentTime === lastTime) {
-        if (++stallCount >= 8) handleError()
+        if (++stallCount >= threshold) handleError()
       } else {
         stallCount = 0
       }
@@ -144,17 +147,28 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
     timersRef.current.push(id)
   }, [handleError])
 
-  // Live catchup — jump to live edge if lag exceeds threshold.
-  // Slow networks tolerate more lag before jumping (larger buffer = intentional delay).
+  // Live catchup — speed up playback to close lag without seeking.
+  // Hard seeks cause a rebuffer stall; rate adjustment is invisible to the viewer.
+  // IMPORTANT: thresholds must exceed maxBufferLength (slow:40, medium:30, fast:20)
+  // or normal buffering will constantly look like "behind live edge" and trigger 1.1×.
   const startLiveCatchup = useCallback((video) => {
-    const tier = getNetworkTier()
-    const maxLag  = tier === 'slow' ? 35 : tier === 'medium' ? 25 : 18
-    const jumpTo  = tier === 'slow' ? 4  : 2
+    const tier      = getNetworkTier()
+    const speedLag  = tier === 'slow' ? 50 : tier === 'medium' ? 38 : 26
+    const maxLag    = tier === 'slow' ? 65 : tier === 'medium' ? 52 : 36
+    const targetLag = tier === 'slow' ? 12 : tier === 'medium' ? 8  : 5
     const id = setInterval(() => {
       if (video.paused || !video.buffered.length) return
       const bufferedEnd = video.buffered.end(video.buffered.length - 1)
-      if (bufferedEnd - video.currentTime > maxLag) video.currentTime = bufferedEnd - jumpTo
-    }, 4000)
+      const lag = bufferedEnd - video.currentTime
+      if (lag > maxLag) {
+        video.playbackRate = 1.0
+        video.currentTime  = bufferedEnd - targetLag
+      } else if (lag > speedLag) {
+        video.playbackRate = 1.1    // gentle speed-up, no stall
+      } else {
+        video.playbackRate = 1.0    // in sync
+      }
+    }, 3000)
     timersRef.current.push(id)
   }, [])
 
@@ -254,7 +268,9 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
       if (isLive) startLiveCatchup(video)
     }
 
-    loadTimeoutRef.current = setTimeout(() => { if (!ready) handleError() }, 30000)
+    // Slow networks need more time to establish the first connection
+    const loadTimeoutMs = tier === 'slow' ? 50000 : 30000
+    loadTimeoutRef.current = setTimeout(() => { if (!ready) handleError() }, loadTimeoutMs)
 
     if (isFlv(url)) {
       ;(async () => {
@@ -264,8 +280,10 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
           { type: 'flv', url, isLive, cors: true, withCredentials: false },
           {
             enableWorker:             true,
-            enableStashBuffer:        false,
-            stashInitialSize:         128,
+            // Slow/medium: enable stash buffer so FLV can absorb network jitter.
+            // Fast: disable for lower latency.
+            enableStashBuffer:        tier !== 'fast',
+            stashInitialSize:         tier === 'slow' ? 1024 : tier === 'medium' ? 512 : 128,
             lazyLoad:                 false,
             deferLoadAfterSourceOpen: false,
           }
@@ -288,33 +306,39 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
         if (Hls.isSupported()) {
           const cfg = isLive
             ? {
-                // Slow networks need more buffer to absorb CDN jitter (at the cost of more delay).
-                // Fast networks keep delay low. Medium is a middle ground.
-                liveSyncDurationCount:          2,
-                liveMaxLatencyDurationCount:    tier === 'slow' ? 8 : tier === 'medium' ? 5 : 3,
-                maxBufferLength:                tier === 'slow' ? 20  : tier === 'medium' ? 14 : 10,
-                maxMaxBufferLength:             tier === 'slow' ? 40  : tier === 'medium' ? 28 : 20,
-                backBufferLength:               tier === 'slow' ? 8   : 4,
+                // Stay further from live edge so normal network jitter never causes a stall
+                liveSyncDurationCount:          tier === 'slow' ? 5  : tier === 'medium' ? 4 : 3,
+                liveMaxLatencyDurationCount:    tier === 'slow' ? 14 : tier === 'medium' ? 12 : 8,
+                // Larger buffers absorb jitter; startLiveCatchup handles lag via rate adjustment
+                maxBufferLength:                tier === 'slow' ? 40 : tier === 'medium' ? 30 : 20,
+                maxMaxBufferLength:             tier === 'slow' ? 80 : tier === 'medium' ? 60 : 40,
+                backBufferLength:               tier === 'slow' ? 12 : tier === 'medium' ? 8  : 8,
                 startFragPrefetch:              true,
-                manifestLoadingMaxRetry:        tier === 'slow' ? 5   : 3,
-                fragLoadingMaxRetry:            tier === 'slow' ? 5   : 3,
-                manifestLoadingMaxRetryTimeout: tier === 'slow' ? 6000 : 3000,
-                fragLoadingMaxRetryTimeout:     tier === 'slow' ? 6000 : 3000,
-                nudgeMaxRetry:                  tier === 'slow' ? 8   : 5,
+                startLevel:                     tier === 'slow' ? 0  : -1,
+                abrEwmaDefaultEstimate:         tier === 'slow' ? 200000 : tier === 'medium' ? 900000 : 1500000,
+                abrBandWidthFactor:             tier === 'slow' ? 0.6 : 0.8,
+                abrBandWidthUpFactor:           tier === 'slow' ? 0.4 : 0.75,
+                manifestLoadingMaxRetry:        tier === 'slow' ? 8  : tier === 'medium' ? 5 : 3,
+                fragLoadingMaxRetry:            tier === 'slow' ? 8  : tier === 'medium' ? 5 : 3,
+                manifestLoadingMaxRetryTimeout: tier === 'slow' ? 10000 : tier === 'medium' ? 6000 : 3000,
+                fragLoadingMaxRetryTimeout:     tier === 'slow' ? 10000 : tier === 'medium' ? 6000 : 3000,
+                nudgeMaxRetry:                  tier === 'slow' ? 12 : 5,
                 nudgeOffset:                    0.1,
                 lowLatencyMode:                 false,
                 enableWorker:                   true,
               }
             : {
-                maxBufferLength:                tier === 'slow' ? 90  : 60,
-                maxMaxBufferLength:             tier === 'slow' ? 180 : 120,
+                maxBufferLength:                tier === 'slow' ? 120 : 60,
+                maxMaxBufferLength:             tier === 'slow' ? 240 : 120,
                 startLevel:                     tier === 'slow' ? 0   : -1,
-                abrEwmaDefaultEstimate:         tier === 'slow' ? 300000 : 1000000,
+                abrEwmaDefaultEstimate:         tier === 'slow' ? 200000 : 1000000,
+                abrBandWidthFactor:             tier === 'slow' ? 0.6 : 0.8,
+                abrBandWidthUpFactor:           tier === 'slow' ? 0.4 : 0.7,
                 backBufferLength:               tier === 'slow' ? 30  : 15,
-                manifestLoadingMaxRetry:        1,
-                fragLoadingMaxRetry:            2,
-                manifestLoadingMaxRetryTimeout: 2000,
-                fragLoadingMaxRetryTimeout:     2000,
+                manifestLoadingMaxRetry:        tier === 'slow' ? 4  : 1,
+                fragLoadingMaxRetry:            tier === 'slow' ? 6  : 2,
+                manifestLoadingMaxRetryTimeout: tier === 'slow' ? 8000 : 2000,
+                fragLoadingMaxRetryTimeout:     tier === 'slow' ? 8000 : 2000,
                 enableWorker:                   true,
               }
 

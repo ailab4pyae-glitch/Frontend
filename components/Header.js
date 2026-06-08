@@ -33,7 +33,7 @@ export default function Header() {
             <path d="M8 5v14l11-7z"/>
           </svg>
           <span style={{ fontWeight: 800, fontSize: 15, letterSpacing: '-0.3px', color: '#0D1220', whiteSpace: 'nowrap' }}>
-            ThaeGyiKone<span style={{ color: '#4c1d95' }}>ThuLay</span>
+            Rangon<span style={{ color: '#4c1d95' }}>TV</span>
           </span>
         </div>
 
