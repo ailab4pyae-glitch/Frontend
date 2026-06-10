@@ -29,8 +29,8 @@ export default function WatchPage() {
   const { data: streams, isLoading: streamsLoading } = useSWR(streamsUrl, fetcher, { refreshInterval: 120000, keepPreviousData: true, revalidateOnFocus: false })
 
   const allUrls = useMemo(() => [
-    ...((streams?.SD || []).map((s) => s.url)),
     ...((streams?.HD || []).map((s) => s.url)),
+    ...((streams?.SD || []).map((s) => s.url)),
   ], [streams])
 
   const [activeUrl,    setActiveUrl]    = useState(null)

@@ -147,27 +147,21 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
     timersRef.current.push(id)
   }, [handleError])
 
-  // Live catchup — speed up playback to close lag without seeking.
-  // Hard seeks cause a rebuffer stall; rate adjustment is invisible to the viewer.
-  // IMPORTANT: thresholds must exceed maxBufferLength (slow:40, medium:30, fast:20)
-  // or normal buffering will constantly look like "behind live edge" and trigger 1.1×.
+  // Live catchup — rate-only adjustment, never seeks.
+  // A hard seek clears the HLS buffer entirely, causing a full re-download stall.
+  // For proxied streams (China CDN) this re-buffer takes 10-20s — the exact pause
+  // users see. Rate adjustment is invisible to the viewer and never stalls.
   const startLiveCatchup = useCallback((video) => {
-    const tier      = getNetworkTier()
-    const speedLag  = tier === 'slow' ? 50 : tier === 'medium' ? 38 : 26
-    const maxLag    = tier === 'slow' ? 65 : tier === 'medium' ? 52 : 36
-    const targetLag = tier === 'slow' ? 12 : tier === 'medium' ? 8  : 5
+    const tier     = getNetworkTier()
+    const speedLag = tier === 'slow' ? 45 : tier === 'medium' ? 35 : 25
+    const fastLag  = tier === 'slow' ? 70 : tier === 'medium' ? 55 : 40
     const id = setInterval(() => {
       if (video.paused || !video.buffered.length) return
       const bufferedEnd = video.buffered.end(video.buffered.length - 1)
       const lag = bufferedEnd - video.currentTime
-      if (lag > maxLag) {
-        video.playbackRate = 1.0
-        video.currentTime  = bufferedEnd - targetLag
-      } else if (lag > speedLag) {
-        video.playbackRate = 1.1    // gentle speed-up, no stall
-      } else {
-        video.playbackRate = 1.0    // in sync
-      }
+      if      (lag > fastLag)  video.playbackRate = 1.3  // very behind — catch up fast
+      else if (lag > speedLag) video.playbackRate = 1.1  // slightly behind — gentle nudge
+      else                     video.playbackRate = 1.0  // in sync
     }, 3000)
     timersRef.current.push(id)
   }, [])
@@ -306,18 +300,18 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
         if (Hls.isSupported()) {
           const cfg = isLive
             ? {
-                // Stay further from live edge so normal network jitter never causes a stall
-                liveSyncDurationCount:          tier === 'slow' ? 5  : tier === 'medium' ? 4 : 3,
-                liveMaxLatencyDurationCount:    tier === 'slow' ? 14 : tier === 'medium' ? 12 : 8,
-                // Larger buffers absorb jitter; startLiveCatchup handles lag via rate adjustment
-                maxBufferLength:                tier === 'slow' ? 40 : tier === 'medium' ? 30 : 20,
-                maxMaxBufferLength:             tier === 'slow' ? 80 : tier === 'medium' ? 60 : 40,
-                backBufferLength:               tier === 'slow' ? 12 : tier === 'medium' ? 8  : 8,
+                // Start at lowest quality level for fastest first-frame — ABR upgrades quickly
+                startLevel:                     0,
+                // Small initial buffer so playback starts fast (proxied streams are slower)
+                liveSyncDurationCount:          tier === 'slow' ? 3  : 2,
+                liveMaxLatencyDurationCount:    tier === 'slow' ? 10 : tier === 'medium' ? 8 : 6,
+                maxBufferLength:                tier === 'slow' ? 30 : tier === 'medium' ? 20 : 12,
+                maxMaxBufferLength:             tier === 'slow' ? 60 : tier === 'medium' ? 40 : 24,
+                backBufferLength:               8,
                 startFragPrefetch:              true,
-                startLevel:                     tier === 'slow' ? 0  : -1,
-                abrEwmaDefaultEstimate:         tier === 'slow' ? 200000 : tier === 'medium' ? 900000 : 1500000,
-                abrBandWidthFactor:             tier === 'slow' ? 0.6 : 0.8,
-                abrBandWidthUpFactor:           tier === 'slow' ? 0.4 : 0.75,
+                abrEwmaDefaultEstimate:         tier === 'slow' ? 200000 : tier === 'medium' ? 600000 : 1000000,
+                abrBandWidthFactor:             tier === 'slow' ? 0.6 : 0.75,
+                abrBandWidthUpFactor:           tier === 'slow' ? 0.4 : 0.65,
                 manifestLoadingMaxRetry:        tier === 'slow' ? 8  : tier === 'medium' ? 5 : 3,
                 fragLoadingMaxRetry:            tier === 'slow' ? 8  : tier === 'medium' ? 5 : 3,
                 manifestLoadingMaxRetryTimeout: tier === 'slow' ? 10000 : tier === 'medium' ? 6000 : 3000,
