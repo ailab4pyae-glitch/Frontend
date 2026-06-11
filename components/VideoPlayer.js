@@ -24,45 +24,50 @@ const RotateIcon = () => (
 )
 
 const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onError, allExhausted = false }, ref) {
-  const containerRef   = useRef(null)
-  const videoRef       = useRef(null)
-  const hlsRef         = useRef(null)
-  const flvRef         = useRef(null)
-  const plyrRef        = useRef(null)
-  const timersRef      = useRef([])
-  const loadTimeoutRef = useRef(null)
-  const countdownRef   = useRef(null)
+  const containerRef    = useRef(null)
+  const videoRef        = useRef(null)
+  const hlsRef          = useRef(null)
+  const flvRef          = useRef(null)
+  const plyrRef         = useRef(null)
+  const timersRef       = useRef([])
+  const loadTimeoutRef  = useRef(null)
+  const countdownRef    = useRef(null)
   const mountedRef      = useRef(true)
   const allExhaustedRef = useRef(allExhausted)
   const onErrorRef      = useRef(onError)
-  const [loading,   setLoading]   = useState(true)
+
+  const [started,   setStarted]   = useState(false) // user clicked play
+  const [loading,   setLoading]   = useState(false)
   const [error,     setError]     = useState(false)
   const [countdown, setCountdown] = useState(null)
 
-  // Keep refs in sync with latest props — no re-render, no cascade
   useEffect(() => { allExhaustedRef.current = allExhausted }, [allExhausted])
   useEffect(() => { onErrorRef.current = onError },           [onError])
 
-  const handleRotate = useCallback(async () => {
+  // User tapped the play overlay — start loading
+  const handlePlay = useCallback(() => {
+    setStarted(true)
+    setLoading(true)
+    setError(false)
+  }, [])
+
+  const handleRotate = useCallback(() => {
     const video     = videoRef.current
     const container = containerRef.current
     if (!video && !container) return
-
     try {
-      // iOS Safari: video element has webkitEnterFullscreen (native landscape)
+      // iOS Safari: must be called synchronously inside a tap handler
       if (video?.webkitEnterFullscreen) {
         video.webkitEnterFullscreen()
         return
       }
-      // Standard fullscreen on container (Android Chrome, desktop)
-      const target = container ?? video
-      if (target.requestFullscreen)       await target.requestFullscreen()
-      else if (target.webkitRequestFullscreen) target.webkitRequestFullscreen()
-      else if (target.mozRequestFullScreen)    target.mozRequestFullScreen()
-
-      // Lock orientation to landscape (Android Chrome — silently ignored on iOS)
-      if (screen.orientation?.lock) {
-        screen.orientation.lock('landscape').catch(() => {})
+      // Android Chrome / desktop
+      const target    = container ?? video
+      const fsPromise = target.requestFullscreen?.()
+        ?? target.webkitRequestFullscreen?.()
+        ?? target.mozRequestFullScreen?.()
+      if (fsPromise && screen.orientation?.lock) {
+        fsPromise.then(() => screen.orientation.lock('landscape').catch(() => {})).catch(() => {})
       }
     } catch (_) {}
   }, [])
@@ -78,9 +83,6 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
     if (loadTimeoutRef.current) { clearTimeout(loadTimeoutRef.current); loadTimeoutRef.current = null }
   }, [])
 
-  // Final action: move to next server or show error.
-  // Reads allExhaustedRef/onErrorRef so this callback never needs to recreate
-  // when those props change — prevents the streaming useEffect from re-running.
   const switchServer = useCallback(() => {
     clearCountdown()
     clearTimers()
@@ -92,14 +94,10 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
       setError(true)
       setLoading(false)
     }
-  }, [clearTimers, clearCountdown]) // stable — no prop dependencies
+  }, [clearTimers, clearCountdown])
 
-  // Immediate switch for stalls/timeouts
-  const handleError = useCallback(() => {
-    switchServer()
-  }, [switchServer])
+  const handleError = useCallback(() => switchServer(), [switchServer])
 
-  // Fatal error from HLS/FLV: show 30s countdown, let slow connections recover
   const handleFatalError = useCallback(() => {
     if (countdownRef.current) return
     if (allExhaustedRef.current) { switchServer(); return }
@@ -109,11 +107,8 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
     setCountdown(remaining)
     countdownRef.current = setInterval(() => {
       remaining -= 1
-      if (remaining <= 0) {
-        switchServer()
-      } else {
-        setCountdown(remaining)
-      }
+      if (remaining <= 0) switchServer()
+      else setCountdown(remaining)
     }, 1000)
   }, [switchServer, clearTimers])
 
@@ -129,44 +124,33 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
     }
   }, [clearTimers, clearCountdown])
 
-  // Stall detector — slow networks buffer longer before we declare a stall
-  // slow: 14×5s=70s  medium: 10×5s=50s  fast: 8×5s=40s
   const startStallDetector = useCallback((video) => {
     const tier      = getNetworkTier()
     const threshold = tier === 'slow' ? 14 : tier === 'medium' ? 10 : 8
     let lastTime = -1, stallCount = 0
     const id = setInterval(() => {
       if (video.paused || video.ended) return
-      if (video.currentTime === lastTime) {
-        if (++stallCount >= threshold) handleError()
-      } else {
-        stallCount = 0
-      }
+      if (video.currentTime === lastTime) { if (++stallCount >= threshold) handleError() }
+      else stallCount = 0
       lastTime = video.currentTime
     }, 5000)
     timersRef.current.push(id)
   }, [handleError])
 
-  // Live catchup — rate-only adjustment, never seeks.
-  // A hard seek clears the HLS buffer entirely, causing a full re-download stall.
-  // For proxied streams (China CDN) this re-buffer takes 10-20s — the exact pause
-  // users see. Rate adjustment is invisible to the viewer and never stalls.
   const startLiveCatchup = useCallback((video) => {
     const tier     = getNetworkTier()
     const speedLag = tier === 'slow' ? 45 : tier === 'medium' ? 35 : 25
     const fastLag  = tier === 'slow' ? 70 : tier === 'medium' ? 55 : 40
     const id = setInterval(() => {
       if (video.paused || !video.buffered.length) return
-      const bufferedEnd = video.buffered.end(video.buffered.length - 1)
-      const lag = bufferedEnd - video.currentTime
-      if      (lag > fastLag)  video.playbackRate = 1.3  // very behind — catch up fast
-      else if (lag > speedLag) video.playbackRate = 1.1  // slightly behind — gentle nudge
-      else                     video.playbackRate = 1.0  // in sync
+      const lag = video.buffered.end(video.buffered.length - 1) - video.currentTime
+      if      (lag > fastLag)  video.playbackRate = 1.3
+      else if (lag > speedLag) video.playbackRate = 1.1
+      else                     video.playbackRate = 1.0
     }, 3000)
     timersRef.current.push(id)
   }, [])
 
-  // Full teardown — called on navigation (popstate) and exposed for parent pages
   const stopAll = useCallback(() => {
     killActiveStream()
     hlsRef.current = null
@@ -176,17 +160,14 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
     if (countdownRef.current)   { clearInterval(countdownRef.current);  countdownRef.current = null }
   }, [])
 
-  // Expose stop() so parent pages can halt playback before navigating
   useImperativeHandle(ref, () => ({ stop: stopAll }), [stopAll])
 
-  // Stop the instant back/forward navigation starts — fires before React unmount
   useEffect(() => {
     window.addEventListener('popstate', stopAll)
     return () => window.removeEventListener('popstate', stopAll)
   }, [stopAll])
 
-  // Plyr — create video element imperatively so Plyr's DOM wrapping never conflicts
-  // with React's reconciler. React only tracks the outer container div.
+  // Plyr — created imperatively so its DOM wrapping never conflicts with React
   useEffect(() => {
     if (!containerRef.current) return
     let cancelled = false
@@ -215,34 +196,26 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
     return () => {
       mountedRef.current = false
       cancelled = true
-
-      // 1. Kill global singleton (stops audio immediately, no matter what)
       killActiveStream()
       hlsRef.current = null
       flvRef.current = null
-
-      // 2. Clear all timers
       timersRef.current.forEach(clearInterval); timersRef.current = []
       if (loadTimeoutRef.current) { clearTimeout(loadTimeoutRef.current); loadTimeoutRef.current = null }
       if (countdownRef.current)   { clearInterval(countdownRef.current);  countdownRef.current = null }
-
-      // 3. Destroy Plyr last
       const p = plyrRef.current || plyr
       if (p) { try { p.destroy() } catch (_) {} }
       plyrRef.current = null
-
-      // 4. Remove video element from DOM
       const v = videoRef.current
       videoRef.current = null
       if (v?.parentNode) { try { v.parentNode.removeChild(v) } catch (_) {} }
     }
   }, [])
 
-  // Stream loading
+  // Stream loading — only runs after user taps play (started=true)
   useEffect(() => {
-    if (!url || !videoRef.current) return
+    if (!url || !videoRef.current || !started) return
     const video = videoRef.current
-    let stopped = false  // guards async callbacks after cleanup has run
+    let stopped = false
 
     killActiveStream()
     activeStream.video = video
@@ -251,7 +224,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
     destroyStream()
 
     const tier = getNetworkTier()
-    let ready = false
+    let ready  = false
 
     const onReady = () => {
       if (stopped || ready) return
@@ -262,7 +235,6 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
       if (isLive) startLiveCatchup(video)
     }
 
-    // Slow networks need more time to establish the first connection
     const loadTimeoutMs = tier === 'slow' ? 50000 : 30000
     loadTimeoutRef.current = setTimeout(() => { if (!ready) handleError() }, loadTimeoutMs)
 
@@ -274,8 +246,6 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
           { type: 'flv', url, isLive, cors: true, withCredentials: false },
           {
             enableWorker:             true,
-            // Slow/medium: enable stash buffer so FLV can absorb network jitter.
-            // Fast: disable for lower latency.
             enableStashBuffer:        tier !== 'fast',
             stashInitialSize:         tier === 'slow' ? 1024 : tier === 'medium' ? 512 : 128,
             lazyLoad:                 false,
@@ -290,7 +260,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
         player.on(flvjs.Events.ERROR, () => handleFatalError())
         player.on(flvjs.Events.MEDIA_INFO, () => {
           player.play()
-          video.addEventListener('playing', () => { if (!stopped) { onReady() } }, { once: true })
+          video.addEventListener('playing', () => { if (!stopped) onReady() }, { once: true })
         })
       })()
     } else {
@@ -300,9 +270,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
         if (Hls.isSupported()) {
           const cfg = isLive
             ? {
-                // Start at lowest quality level for fastest first-frame — ABR upgrades quickly
                 startLevel:                     0,
-                // Small initial buffer so playback starts fast (proxied streams are slower)
                 liveSyncDurationCount:          tier === 'slow' ? 3  : 2,
                 liveMaxLatencyDurationCount:    tier === 'slow' ? 10 : tier === 'medium' ? 8 : 6,
                 maxBufferLength:                tier === 'slow' ? 30 : tier === 'medium' ? 20 : 12,
@@ -344,8 +312,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
           hls.attachMedia(video)
           hls.on(Hls.Events.MANIFEST_PARSED, () => {
             video.play().catch(() => {})
-            // Hide spinner on first frame, not just manifest — prevents gray-box flash
-            video.addEventListener('playing', () => { if (!stopped) { onReady() } }, { once: true })
+            video.addEventListener('playing', () => { if (!stopped) onReady() }, { once: true })
           })
           hls.on(Hls.Events.ERROR, (_, data) => { if (data.fatal) handleFatalError() })
         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
@@ -360,13 +327,13 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
     }
 
     return () => {
-      stopped = true          // prevent any in-flight async callback from attaching
-      killActiveStream()      // kill immediately — works even if HLS hadn't registered yet
+      stopped = true
+      killActiveStream()
       if (mountedRef.current) destroyStream()
     }
-  }, [url, isLive, handleError, handleFatalError, destroyStream, startStallDetector, startLiveCatchup])
+  }, [url, isLive, started, handleError, handleFatalError, destroyStream, startStallDetector, startLiveCatchup])
 
-  // Iframe-based player for stream server URLs (e.g. livepingscorex.com)
+  // Iframe player
   if (isIframe(url)) {
     return (
       <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', background: '#000', borderRadius: 12, overflow: 'hidden' }}>
@@ -386,12 +353,35 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
     <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', background: '#000', borderRadius: 12, overflow: 'hidden' }}>
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
 
-      {/* Rotate button — sits above Plyr controls */}
-      {!loading && !error && countdown === null && (
+      {/* Play overlay — shown immediately until user taps play */}
+      {!started && !error && (
+        <div
+          onClick={handlePlay}
+          style={{
+            position: 'absolute', inset: 0, zIndex: 25, cursor: 'pointer',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            gap: 12, background: 'rgba(0,0,0,0.6)',
+          }}
+        >
+          <div style={{
+            width: 72, height: 72, borderRadius: '50%',
+            background: 'rgba(0,255,135,0.18)', border: '2px solid rgba(0,255,135,0.5)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="#00FF87">
+              <path d="M8 5v14l11-7z"/>
+            </svg>
+          </div>
+          <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', fontWeight: 600 }}>Tap to play</span>
+        </div>
+      )}
+
+      {/* Rotate button */}
+      {started && !loading && !error && countdown === null && (
         <button
           onClick={handleRotate}
           style={{
-            position: 'absolute', bottom: 52, right: 10, zIndex: 20,
+            position: 'absolute', bottom: 52, right: 10, zIndex: 30,
             background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)',
             border: '1px solid rgba(255,255,255,0.18)', borderRadius: 8,
             color: '#fff', padding: '6px 8px', cursor: 'pointer',
@@ -403,8 +393,8 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
         </button>
       )}
 
-      {/* Loading spinner */}
-      {loading && !error && (
+      {/* Loading spinner — only after user tapped play */}
+      {started && loading && !error && (
         <div style={{
           position: 'absolute', inset: 0, zIndex: 30,
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
@@ -415,7 +405,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
         </div>
       )}
 
-      {/* Countdown overlay — server failed, giving slow connections time to recover */}
+      {/* Countdown overlay */}
       {countdown !== null && !error && (
         <div style={{
           position: 'absolute', inset: 0, zIndex: 30,
@@ -431,12 +421,8 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
               {countdown}
             </span>
           </div>
-          <p style={{ fontSize: 14, fontWeight: 600, color: 'rgba(255,255,255,0.7)', margin: 0 }}>
-            Server failed
-          </p>
-          <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', margin: 0 }}>
-            Switching to next server automatically…
-          </p>
+          <p style={{ fontSize: 14, fontWeight: 600, color: 'rgba(255,255,255,0.7)', margin: 0 }}>Server failed</p>
+          <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', margin: 0 }}>Switching to next server automatically…</p>
           <button
             onClick={switchServer}
             style={{
@@ -450,7 +436,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
         </div>
       )}
 
-      {/* Error screen — all servers exhausted */}
+      {/* Error screen */}
       {error && (
         <div style={{
           position: 'absolute', inset: 0, zIndex: 30,
@@ -458,9 +444,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
           gap: 12, background: '#0a0e1a', padding: 24, textAlign: 'center',
         }}>
           <div style={{ fontSize: 38 }}>📡</div>
-          <p style={{ fontSize: 15, fontWeight: 700, color: 'rgba(255,255,255,0.85)', margin: 0 }}>
-            All servers failed
-          </p>
+          <p style={{ fontSize: 15, fontWeight: 700, color: 'rgba(255,255,255,0.85)', margin: 0 }}>All servers failed</p>
           <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', margin: 0, lineHeight: 1.7, maxWidth: 260 }}>
             Live streams can drop between coverage windows.<br />
             Wait 1–2 minutes and try again — servers usually recover on their own.

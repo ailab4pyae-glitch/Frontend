@@ -166,7 +166,7 @@ export default function WatchPage() {
               </div>
             )
             : activeUrl
-            ? <VideoPlayer key={activeUrl} url={activeUrl} isLive={match?.status === 'live'} onError={handleError} allExhausted={allExhausted} />
+            ? <VideoPlayer url={activeUrl} isLive={match?.status === 'live'} onError={handleError} allExhausted={allExhausted} />
             : streamsLoading
             ? (
               <div style={{ aspectRatio: '16/9', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, background: '#000' }}>
