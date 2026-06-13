@@ -1,7 +1,5 @@
 'use client'
 
-const getFormat = (url = '') => url.includes('.m3u8') ? 'HLS' : url.includes('.flv') ? 'FLV' : null
-
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const THEME = {
   HD: {
@@ -25,11 +23,9 @@ const THEME = {
 }
 
 // ── Single stream button ───────────────────────────────────────────────────────
-function StreamButton({ server, index, isActive, onSelect }) {
-  const fmt     = getFormat(server.url)
-  const quality = server.quality  // 'HD' | 'SD'
+function StreamButton({ server, lineNumber, isActive, onSelect }) {
+  const quality = server.quality
   const t       = quality === 'HD' ? THEME.HD : THEME.SD
-  const num     = index + 1
 
   return (
     <button
@@ -47,7 +43,6 @@ function StreamButton({ server, index, isActive, onSelect }) {
         width:      '100%',
       }}
     >
-      {/* Active left bar */}
       {isActive && (
         <span style={{
           position: 'absolute', top: 0, left: 0, bottom: 0, width: 3,
@@ -63,27 +58,13 @@ function StreamButton({ server, index, isActive, onSelect }) {
         {quality}
       </span>
 
-      {/* Server number */}
       <span style={{
         fontSize: 13, fontWeight: 800,
         color: isActive ? '#fff' : t.accent,
         flex: 1, opacity: isActive ? 1 : 0.85,
       }}>
-        Stream {num}
+        Line {lineNumber}
       </span>
-
-      {/* Format pill */}
-      {fmt && (
-        <span style={{
-          fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
-          background: fmt === 'HLS' ? 'rgba(255,255,255,0.07)' : 'rgba(251,191,36,0.1)',
-          color:      fmt === 'HLS' ? 'rgba(255,255,255,0.4)'  : '#fbbf24',
-          border:     `1px solid ${fmt === 'HLS' ? 'rgba(255,255,255,0.1)' : 'rgba(251,191,36,0.25)'}`,
-          flexShrink: 0,
-        }}>
-          {fmt}
-        </span>
-      )}
 
       {/* Playing dot or signal bars */}
       {isActive ? (
@@ -105,7 +86,7 @@ function StreamButton({ server, index, isActive, onSelect }) {
 }
 
 // ── Section header ────────────────────────────────────────────────────────────
-function Section({ qualityKey, servers, activeUrl, onSelect }) {
+function Section({ qualityKey, servers, activeUrl, onSelect, startLine }) {
   if (!servers.length) return null
   const t = THEME[qualityKey] || THEME.SD
 
@@ -117,15 +98,11 @@ function Section({ qualityKey, servers, activeUrl, onSelect }) {
           background: t.accent, flexShrink: 0,
           boxShadow: `0 0 6px ${t.accent}`,
         }} />
-        <span style={{
-          fontSize: 11, fontWeight: 800,
-          color: t.accent,
-          letterSpacing: 1.2, textTransform: 'uppercase',
-        }}>
+        <span style={{ fontSize: 11, fontWeight: 800, color: t.accent, letterSpacing: 1.2, textTransform: 'uppercase' }}>
           {t.label} Quality
         </span>
         <span style={{ fontSize: 10, color: t.accent, fontWeight: 700, opacity: 0.6 }}>
-          {servers.length} {servers.length === 1 ? 'stream' : 'streams'}
+          {servers.length} {servers.length === 1 ? 'line' : 'lines'}
         </span>
       </div>
 
@@ -134,7 +111,7 @@ function Section({ qualityKey, servers, activeUrl, onSelect }) {
           <StreamButton
             key={s.id || i}
             server={s}
-            index={i}
+            lineNumber={startLine + i}
             isActive={s.url === activeUrl}
             onSelect={onSelect}
           />
@@ -200,9 +177,9 @@ export default function ServerSelector({ streams, activeUrl, onSelect }) {
         </span>
       </div>
 
-      {/* HD first — best quality on top */}
-      <Section qualityKey="HD" servers={hdStreams} activeUrl={activeUrl} onSelect={onSelect} />
-      <Section qualityKey="SD" servers={sdStreams} activeUrl={activeUrl} onSelect={onSelect} />
+      {/* HD first — best quality on top; line numbers are global across HD+SD */}
+      <Section qualityKey="HD" servers={hdStreams} activeUrl={activeUrl} onSelect={onSelect} startLine={1} />
+      <Section qualityKey="SD" servers={sdStreams} activeUrl={activeUrl} onSelect={onSelect} startLine={hdStreams.length + 1} />
     </div>
   )
 }

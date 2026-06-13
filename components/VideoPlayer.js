@@ -2,9 +2,8 @@
 import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from 'react'
 import { activeStream, killActiveStream } from '@/lib/player'
 
-const isFlv    = (url) => /\.flv(\?|$)/i.test(url) || /\/proxy\/flv\//i.test(url)
 const isHls    = (url) => /\.m3u8(\?|$)/i.test(url) || /\/proxy\/stream\//i.test(url)
-const isIframe = (url) => url && !isFlv(url) && !isHls(url)
+const isIframe = (url) => url && !isHls(url)
 const SWITCH_DELAY = 30
 
 const getNetworkTier = () => {
@@ -27,7 +26,6 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
   const containerRef    = useRef(null)
   const videoRef        = useRef(null)
   const hlsRef          = useRef(null)
-  const flvRef          = useRef(null)
   const plyrRef         = useRef(null)
   const timersRef       = useRef([])
   const loadTimeoutRef  = useRef(null)
@@ -35,8 +33,9 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
   const mountedRef      = useRef(true)
   const allExhaustedRef = useRef(allExhausted)
   const onErrorRef      = useRef(onError)
+  const iosCleanupRef   = useRef(null)
 
-  const [started,   setStarted]   = useState(false) // user clicked play
+  const [started,   setStarted]   = useState(false)
   const [loading,   setLoading]   = useState(false)
   const [error,     setError]     = useState(false)
   const [countdown, setCountdown] = useState(null)
@@ -44,7 +43,6 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
   useEffect(() => { allExhaustedRef.current = allExhausted }, [allExhausted])
   useEffect(() => { onErrorRef.current = onError },           [onError])
 
-  // User tapped the play overlay — start loading
   const handlePlay = useCallback(() => {
     setStarted(true)
     setLoading(true)
@@ -56,12 +54,10 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
     const container = containerRef.current
     if (!video && !container) return
     try {
-      // iOS Safari: must be called synchronously inside a tap handler
       if (video?.webkitEnterFullscreen) {
         video.webkitEnterFullscreen()
         return
       }
-      // Android Chrome / desktop
       const target    = container ?? video
       const fsPromise = target.requestFullscreen?.()
         ?? target.webkitRequestFullscreen?.()
@@ -118,15 +114,12 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
     const video = videoRef.current
     if (video) { try { video.playbackRate = 1.0; video.pause(); video.src = '' } catch (_) {} }
     if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null }
-    if (flvRef.current) {
-      try { flvRef.current.unload(); flvRef.current.detachMediaElement(); flvRef.current.destroy() } catch (_) {}
-      flvRef.current = null
-    }
   }, [clearTimers, clearCountdown])
 
   const startStallDetector = useCallback((video) => {
     const tier      = getNetworkTier()
-    const threshold = tier === 'slow' ? 14 : tier === 'medium' ? 10 : 8
+    // Tighter thresholds on mobile: 5s × 6=30s slow, 5s × 4=20s medium, 5s × 3=15s fast
+    const threshold = tier === 'slow' ? 6 : tier === 'medium' ? 4 : 3
     let lastTime = -1, stallCount = 0
     const id = setInterval(() => {
       if (video.paused || video.ended) return
@@ -154,7 +147,6 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
   const stopAll = useCallback(() => {
     killActiveStream()
     hlsRef.current = null
-    flvRef.current = null
     timersRef.current.forEach(clearInterval); timersRef.current = []
     if (loadTimeoutRef.current) { clearTimeout(loadTimeoutRef.current); loadTimeoutRef.current = null }
     if (countdownRef.current)   { clearInterval(countdownRef.current);  countdownRef.current = null }
@@ -167,7 +159,6 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
     return () => window.removeEventListener('popstate', stopAll)
   }, [stopAll])
 
-  // Plyr — created imperatively so its DOM wrapping never conflicts with React
   useEffect(() => {
     if (!containerRef.current) return
     let cancelled = false
@@ -198,7 +189,6 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
       cancelled = true
       killActiveStream()
       hlsRef.current = null
-      flvRef.current = null
       timersRef.current.forEach(clearInterval); timersRef.current = []
       if (loadTimeoutRef.current) { clearTimeout(loadTimeoutRef.current); loadTimeoutRef.current = null }
       if (countdownRef.current)   { clearInterval(countdownRef.current);  countdownRef.current = null }
@@ -211,7 +201,6 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
     }
   }, [])
 
-  // Stream loading — only runs after user taps play (started=true)
   useEffect(() => {
     if (!url || !videoRef.current || !started) return
     const video = videoRef.current
@@ -238,102 +227,86 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
     const loadTimeoutMs = tier === 'slow' ? 50000 : 30000
     loadTimeoutRef.current = setTimeout(() => { if (!ready) handleError() }, loadTimeoutMs)
 
-    if (isFlv(url)) {
-      ;(async () => {
-        const flvjs = (await import('flv.js')).default
-        if (stopped || !flvjs.isSupported()) { handleError(); return }
-        const player = flvjs.createPlayer(
-          { type: 'flv', url, isLive, cors: true, withCredentials: false },
-          {
-            enableWorker:             true,
-            enableStashBuffer:        tier !== 'fast',
-            stashInitialSize:         tier === 'slow' ? 1024 : tier === 'medium' ? 512 : 128,
-            lazyLoad:                 false,
-            deferLoadAfterSourceOpen: false,
-          }
-        )
-        if (stopped) { try { player.destroy() } catch (_) {}; return }
-        flvRef.current = player
-        activeStream.flv = player
-        player.attachMediaElement(video)
-        player.load()
-        player.on(flvjs.Events.ERROR, () => handleFatalError())
-        player.on(flvjs.Events.MEDIA_INFO, () => {
-          player.play()
+    ;(async () => {
+      const Hls = (await import('hls.js')).default
+      if (stopped) return
+      if (Hls.isSupported()) {
+        const cfg = isLive
+          ? {
+              startLevel:                     0,
+              liveSyncDurationCount:          tier === 'slow' ? 3  : 2,
+              liveMaxLatencyDurationCount:    tier === 'slow' ? 10 : tier === 'medium' ? 8 : 6,
+              maxBufferLength:                tier === 'slow' ? 30 : tier === 'medium' ? 20 : 12,
+              maxMaxBufferLength:             tier === 'slow' ? 60 : tier === 'medium' ? 40 : 24,
+              backBufferLength:               8,
+              startFragPrefetch:              true,
+              abrEwmaDefaultEstimate:         tier === 'slow' ? 200000 : tier === 'medium' ? 600000 : 1000000,
+              abrBandWidthFactor:             tier === 'slow' ? 0.6 : 0.75,
+              abrBandWidthUpFactor:           tier === 'slow' ? 0.4 : 0.65,
+              manifestLoadingMaxRetry:        tier === 'slow' ? 8  : tier === 'medium' ? 5 : 3,
+              fragLoadingMaxRetry:            tier === 'slow' ? 8  : tier === 'medium' ? 5 : 3,
+              manifestLoadingMaxRetryTimeout: tier === 'slow' ? 10000 : tier === 'medium' ? 6000 : 3000,
+              fragLoadingMaxRetryTimeout:     tier === 'slow' ? 10000 : tier === 'medium' ? 6000 : 3000,
+              nudgeMaxRetry:                  tier === 'slow' ? 12 : 5,
+              nudgeOffset:                    0.1,
+              lowLatencyMode:                 false,
+              enableWorker:                   true,
+            }
+          : {
+              maxBufferLength:                tier === 'slow' ? 120 : 60,
+              maxMaxBufferLength:             tier === 'slow' ? 240 : 120,
+              startLevel:                     tier === 'slow' ? 0   : -1,
+              abrEwmaDefaultEstimate:         tier === 'slow' ? 200000 : 1000000,
+              abrBandWidthFactor:             tier === 'slow' ? 0.6 : 0.8,
+              abrBandWidthUpFactor:           tier === 'slow' ? 0.4 : 0.7,
+              backBufferLength:               tier === 'slow' ? 30  : 15,
+              manifestLoadingMaxRetry:        tier === 'slow' ? 4  : 1,
+              fragLoadingMaxRetry:            tier === 'slow' ? 6  : 2,
+              manifestLoadingMaxRetryTimeout: tier === 'slow' ? 8000 : 2000,
+              fragLoadingMaxRetryTimeout:     tier === 'slow' ? 8000 : 2000,
+              enableWorker:                   true,
+            }
+
+        const hls = new Hls(cfg)
+        if (stopped) { try { hls.destroy() } catch (_) {}; return }
+        hlsRef.current = hls
+        activeStream.hls = hls
+        hls.loadSource(url)
+        hls.attachMedia(video)
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          video.play().catch(() => {})
           video.addEventListener('playing', () => { if (!stopped) onReady() }, { once: true })
         })
-      })()
-    } else {
-      ;(async () => {
-        const Hls = (await import('hls.js')).default
-        if (stopped) return
-        if (Hls.isSupported()) {
-          const cfg = isLive
-            ? {
-                startLevel:                     0,
-                liveSyncDurationCount:          tier === 'slow' ? 3  : 2,
-                liveMaxLatencyDurationCount:    tier === 'slow' ? 10 : tier === 'medium' ? 8 : 6,
-                maxBufferLength:                tier === 'slow' ? 30 : tier === 'medium' ? 20 : 12,
-                maxMaxBufferLength:             tier === 'slow' ? 60 : tier === 'medium' ? 40 : 24,
-                backBufferLength:               8,
-                startFragPrefetch:              true,
-                abrEwmaDefaultEstimate:         tier === 'slow' ? 200000 : tier === 'medium' ? 600000 : 1000000,
-                abrBandWidthFactor:             tier === 'slow' ? 0.6 : 0.75,
-                abrBandWidthUpFactor:           tier === 'slow' ? 0.4 : 0.65,
-                manifestLoadingMaxRetry:        tier === 'slow' ? 8  : tier === 'medium' ? 5 : 3,
-                fragLoadingMaxRetry:            tier === 'slow' ? 8  : tier === 'medium' ? 5 : 3,
-                manifestLoadingMaxRetryTimeout: tier === 'slow' ? 10000 : tier === 'medium' ? 6000 : 3000,
-                fragLoadingMaxRetryTimeout:     tier === 'slow' ? 10000 : tier === 'medium' ? 6000 : 3000,
-                nudgeMaxRetry:                  tier === 'slow' ? 12 : 5,
-                nudgeOffset:                    0.1,
-                lowLatencyMode:                 false,
-                enableWorker:                   true,
-              }
-            : {
-                maxBufferLength:                tier === 'slow' ? 120 : 60,
-                maxMaxBufferLength:             tier === 'slow' ? 240 : 120,
-                startLevel:                     tier === 'slow' ? 0   : -1,
-                abrEwmaDefaultEstimate:         tier === 'slow' ? 200000 : 1000000,
-                abrBandWidthFactor:             tier === 'slow' ? 0.6 : 0.8,
-                abrBandWidthUpFactor:           tier === 'slow' ? 0.4 : 0.7,
-                backBufferLength:               tier === 'slow' ? 30  : 15,
-                manifestLoadingMaxRetry:        tier === 'slow' ? 4  : 1,
-                fragLoadingMaxRetry:            tier === 'slow' ? 6  : 2,
-                manifestLoadingMaxRetryTimeout: tier === 'slow' ? 8000 : 2000,
-                fragLoadingMaxRetryTimeout:     tier === 'slow' ? 8000 : 2000,
-                enableWorker:                   true,
-              }
-
-          const hls = new Hls(cfg)
-          if (stopped) { try { hls.destroy() } catch (_) {}; return }
-          hlsRef.current = hls
-          activeStream.hls = hls
-          hls.loadSource(url)
-          hls.attachMedia(video)
-          hls.on(Hls.Events.MANIFEST_PARSED, () => {
-            video.play().catch(() => {})
-            video.addEventListener('playing', () => { if (!stopped) onReady() }, { once: true })
-          })
-          hls.on(Hls.Events.ERROR, (_, data) => { if (data.fatal) handleFatalError() })
-        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-          video.src = url
-          video.play().catch(() => {})
-          video.addEventListener('playing', onReady, { once: true })
-          video.addEventListener('error', handleError, { once: true })
-        } else {
-          handleError()
+        hls.on(Hls.Events.ERROR, (_, data) => { if (data.fatal) handleFatalError() })
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        // iOS native HLS — persistent handlers so mid-stream failures are caught
+        const onNativeError = () => { if (!stopped) handleFatalError() }
+        const onNativeStall = () => {
+          // iOS fires 'stalled' instead of 'error' when CDN token expires mid-stream
+          if (!stopped && !video.paused) handleFatalError()
         }
-      })()
-    }
+        iosCleanupRef.current = () => {
+          video.removeEventListener('error',   onNativeError)
+          video.removeEventListener('stalled', onNativeStall)
+        }
+        video.src = url
+        video.play().catch(() => {})
+        video.addEventListener('playing', onReady, { once: true })
+        video.addEventListener('error',   onNativeError)
+        video.addEventListener('stalled', onNativeStall)
+      } else {
+        handleError()
+      }
+    })()
 
     return () => {
       stopped = true
       killActiveStream()
+      if (iosCleanupRef.current) { iosCleanupRef.current(); iosCleanupRef.current = null }
       if (mountedRef.current) destroyStream()
     }
   }, [url, isLive, started, handleError, handleFatalError, destroyStream, startStallDetector, startLiveCatchup])
 
-  // Iframe player
   if (isIframe(url)) {
     return (
       <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', background: '#000', borderRadius: 12, overflow: 'hidden' }}>
@@ -353,7 +326,6 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
     <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', background: '#000', borderRadius: 12, overflow: 'hidden' }}>
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
 
-      {/* Play overlay — shown immediately until user taps play */}
       {!started && !error && (
         <div
           onClick={handlePlay}
@@ -376,7 +348,6 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
         </div>
       )}
 
-      {/* Rotate button */}
       {started && !loading && !error && countdown === null && (
         <button
           onClick={handleRotate}
@@ -393,7 +364,6 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
         </button>
       )}
 
-      {/* Loading spinner — only after user tapped play */}
       {started && loading && !error && (
         <div style={{
           position: 'absolute', inset: 0, zIndex: 30,
@@ -405,7 +375,6 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
         </div>
       )}
 
-      {/* Countdown overlay */}
       {countdown !== null && !error && (
         <div style={{
           position: 'absolute', inset: 0, zIndex: 30,
@@ -436,7 +405,6 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
         </div>
       )}
 
-      {/* Error screen */}
       {error && (
         <div style={{
           position: 'absolute', inset: 0, zIndex: 30,

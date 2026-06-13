@@ -5,9 +5,10 @@ export default function LiveBadge({ status, scheduledAt }) {
     return (
       <span style={{
         display: 'inline-flex', alignItems: 'center', gap: 5,
-        background: 'rgba(0,255,135,0.12)', border: '1px solid rgba(0,255,135,0.3)',
-        color: '#00FF87', fontSize: 11, fontWeight: 700,
+        background: 'rgba(255,68,68,0.15)', border: '1px solid rgba(255,68,68,0.4)',
+        color: '#ff4444', fontSize: 11, fontWeight: 800,
         padding: '3px 8px', borderRadius: 20, letterSpacing: '.5px',
+        animation: 'liveBadgePulse 1.4s ease-in-out infinite',
       }}>
         <span className="live-dot" /> LIVE
       </span>
@@ -25,7 +26,7 @@ export default function LiveBadge({ status, scheduledAt }) {
     )
   }
 
-  // Scheduled — show SOON badge if within 60 min, otherwise show time label
+  // Scheduled — only show badge if match is within 60 min (SOON)
   const soon  = isSoon(scheduledAt)
   const label = getTimeLabel(scheduledAt)
 
@@ -42,12 +43,6 @@ export default function LiveBadge({ status, scheduledAt }) {
     )
   }
 
-  return (
-    <span style={{
-      background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.55)',
-      fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 20,
-    }}>
-      {label}
-    </span>
-  )
+  // Far-future scheduled — no badge (time is already shown in card centre)
+  return null
 }

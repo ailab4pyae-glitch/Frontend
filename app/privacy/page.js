@@ -12,7 +12,7 @@ const Section = ({ title, mm, children }) => (
 )
 
 export default function PrivacyPage() {
-  const siteName = process.env.NEXT_PUBLIC_SITE_NAME || 'ThaeGyiKoneThuLay'
+  const siteName = process.env.NEXT_PUBLIC_SITE_NAME || 'Sportlivemm'
   const domain   = process.env.NEXT_PUBLIC_SITE_URL  || 'https://yoursite.com'
 
   return (

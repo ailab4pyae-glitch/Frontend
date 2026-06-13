@@ -1,10 +1,10 @@
 export const metadata = {
-  title: 'About | ကျွန်ုပ်တို့အကြောင်း',
-  description: 'About ThaeGyiKoneThuLay — Free live football and sports streaming for Myanmar fans. Watch Premier League, La Liga, Champions League and more.',
+  title: 'About Ballone Live | Free Football Live Streaming',
+  description: 'About Ballone Live — Free live football streaming. Watch Premier League, Champions League, La Liga, Serie A and more sports matches online.',
 }
 
 export default function AboutPage() {
-  const siteName = process.env.NEXT_PUBLIC_SITE_NAME || 'ThaeGyiKoneThuLay'
+  const siteName = process.env.NEXT_PUBLIC_SITE_NAME || 'Ballone Live'
 
   return (
     <div style={{ minHeight: '100vh', background: '#0A0E1A', color: '#fff' }}>
