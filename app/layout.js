@@ -5,6 +5,7 @@ const SITE_NAME = process.env.NEXT_PUBLIC_SITE_NAME || 'Ballone Live'
 const SITE_DESC = process.env.NEXT_PUBLIC_SITE_DESC || 'Watch live football matches free online. Stream Premier League, Champions League, La Liga, Serie A and more on Ballone Live.'
 const SITE_URL  = process.env.NEXT_PUBLIC_SITE_URL  || 'https://ballonelive.com'
 const ADSENSE_ID = process.env.NEXT_PUBLIC_ADSENSE_ID || ''
+const GA_ID      = process.env.NEXT_PUBLIC_GA_ID      || 'G-0NJWFQCF34'
 
 export const viewport = {
   width: 'device-width',
@@ -75,6 +76,21 @@ export default function RootLayout({ children }) {
       </head>
       <body>
         {children}
+
+        {/* Google Analytics 4 */}
+        {GA_ID && <>
+          <Script
+            src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`}
+            strategy="afterInteractive"
+          />
+          <Script id="ga4-init" strategy="afterInteractive">{`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', '${GA_ID}', { page_path: window.location.pathname });
+          `}</Script>
+        </>}
+
         {ADSENSE_ID && (
           <Script
             async
