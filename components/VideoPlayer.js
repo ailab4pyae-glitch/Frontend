@@ -4,7 +4,7 @@ import { activeStream, killActiveStream } from '@/lib/player'
 
 const isHls    = (url) => /\.m3u8(\?|$)/i.test(url) || /\/proxy\/stream\//i.test(url)
 const isIframe = (url) => url && !isHls(url)
-const SWITCH_DELAY = 30
+const SWITCH_DELAY = 3
 
 const getNetworkTier = () => {
   if (typeof navigator === 'undefined') return 'medium'

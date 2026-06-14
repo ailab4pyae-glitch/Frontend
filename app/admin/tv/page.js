@@ -105,7 +105,7 @@ function ChannelRow({ ch, onEdit, onDelete, onToggle }) {
 }
 
 function ChannelModal({ channel, onSave, onClose }) {
-  const [form, setForm] = useState(channel)
+  const [form, setForm] = useState({ ...channel, stream_url: channel.stream_url ?? '', logo_url: channel.logo_url ?? '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 

@@ -205,7 +205,7 @@ export default function WatchPage() {
   const { data: match }                      = useSWR(apiUrl.match(id),   fetcher, { refreshInterval: 60000, revalidateOnFocus: false })
   const token = getToken()
   const streamsUrl = token ? `${apiUrl.streams(id)}?token=${token}` : apiUrl.streams(id)
-  const { data: streams, isLoading: streamsLoading } = useSWR(streamsUrl, fetcher, { refreshInterval: 120000, keepPreviousData: true, revalidateOnFocus: false })
+  const { data: streams, isLoading: streamsLoading, mutate: mutateStreams } = useSWR(streamsUrl, fetcher, { refreshInterval: 120000, keepPreviousData: true, revalidateOnFocus: false })
 
   const allUrls = useMemo(() => [
     ...((streams?.HD || []).map((s) => s.url)),
@@ -240,9 +240,8 @@ export default function WatchPage() {
     else                        setActiveUrl(null) // soco iframe — no video URL
   }, [isMainPage, mainMode, streams])
 
-  // When streams load or refresh: keep playing the current URL if it's still in the list.
-  // If only the CDN token changed (same base path), keep the old URL — still valid until
-  // the health check marks it expired. Only switch when the stream is truly gone.
+  // When streams load or refresh: if CDN token changed (same base path, different full URL)
+  // → auto-switch to the fresh URL. This picks up re-warm tokens without user action.
   useEffect(() => {
     if (isMainPage || !allUrls.length) return
     setAllExhausted(false)
@@ -256,17 +255,38 @@ export default function WatchPage() {
     } else {
       setActiveUrl((prev) => {
         if (!prev) return allUrls[0]
+        // Exact match — still playing, no change needed
         if (allUrls.includes(prev)) return prev
+        // Base path matches but token changed (re-warm) — switch to fresh URL silently
         const prevBase = urlBase(prev)
-        if (allUrls.some(u => urlBase(u) === prevBase)) return prev
+        const refreshed = allUrls.find(u => urlBase(u) === prevBase)
+        if (refreshed) return refreshed
         return allUrls[0]
       })
     }
   }, [allUrls, id, isMainPage])
 
+  // When all servers exhausted: immediately force-refresh stream URLs from backend.
+  // Re-warm may have already written new CDN tokens — fetch them and restart from server 1.
+  const mutateStreamsRef = useRef(mutateStreams)
+  useEffect(() => { mutateStreamsRef.current = mutateStreams }, [mutateStreams])
+
+  useEffect(() => {
+    if (!allExhausted) return
+    // Force-fetch fresh stream URLs (bypasses Redis cache on next poll)
+    const t = setTimeout(() => {
+      mutateStreamsRef.current()
+        .then(() => {
+          // After fresh URLs arrive, reset exhausted state so player restarts from URL[0]
+          setAllExhausted(false)
+          initializedRef.current = false // allow re-initialization with fresh URLs
+        })
+        .catch(() => {})
+    }, 5000) // wait 5s so backend re-warm has time to finish
+    return () => clearTimeout(t)
+  }, [allExhausted])
+
   // Stable callback — reads allUrlsRef so allUrls is never a dependency.
-  // This prevents onError prop from changing on every streams refresh,
-  // which would cascade into VideoPlayer's useEffect and restart the stream.
   const handleError = useCallback(() => {
     setActiveUrl((prev) => {
       const urls = allUrlsRef.current
