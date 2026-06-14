@@ -496,6 +496,21 @@ export default function WatchPage() {
             />
           </div>
         ) : null}
+        {/* VPN tip */}
+        <div style={{
+          margin: '12px 16px 0',
+          padding: '10px 14px',
+          borderRadius: 10,
+          background: 'rgba(255,193,7,0.07)',
+          border: '1px solid rgba(255,193,7,0.2)',
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <span style={{ fontSize: 16, flexShrink: 0 }}>💡</span>
+          <span style={{ fontSize: 12, color: 'rgba(255,220,100,0.85)', lineHeight: 1.6 }}>
+            ကြည့်လို့မရရင် VPN အဖွင့်အပိတ် လုပ်ပြီးကြည့်ပေးပါ
+          </span>
+        </div>
+
         {!isPremium && <AdBanner page="watch" slot="watch_below_player" style={{ padding: '12px 16px 0' }} />}
       </div>
     </div>
