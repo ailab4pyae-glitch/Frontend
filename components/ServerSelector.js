@@ -122,7 +122,7 @@ function Section({ qualityKey, servers, activeUrl, onSelect, startLine }) {
 }
 
 // ── Empty state ────────────────────────────────────────────────────────────────
-function EmptyState() {
+function EmptyState({ onRefresh, isRefreshing }) {
   return (
     <div style={{
       background: 'rgba(255,255,255,0.02)',
@@ -133,15 +133,29 @@ function EmptyState() {
       <p style={{ fontSize: 15, fontWeight: 700, color: 'rgba(255,255,255,0.5)', margin: '0 0 6px' }}>
         Streams loading…
       </p>
-      <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)', margin: 0, lineHeight: 1.6 }}>
+      <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)', margin: '0 0 14px', lineHeight: 1.6 }}>
         Streams appear at kickoff.<br/>Check back in a moment.
       </p>
+      {onRefresh && (
+        <button
+          onClick={onRefresh}
+          disabled={isRefreshing}
+          style={{
+            background: 'rgba(0,229,255,0.08)', border: '1px solid rgba(0,229,255,0.25)',
+            color: '#00e5ff', borderRadius: 20, padding: '7px 20px',
+            fontSize: 12, fontWeight: 700, cursor: isRefreshing ? 'default' : 'pointer',
+            opacity: isRefreshing ? 0.5 : 1,
+          }}
+        >
+          {isRefreshing ? 'Checking…' : '↻ Refresh'}
+        </button>
+      )}
     </div>
   )
 }
 
 // ── Root component ─────────────────────────────────────────────────────────────
-export default function ServerSelector({ streams, activeUrl, onSelect }) {
+export default function ServerSelector({ streams, activeUrl, onSelect, onRefresh, isRefreshing }) {
   const rawSD = streams?.SD || []
   const rawHD = streams?.HD || []
 
@@ -150,7 +164,7 @@ export default function ServerSelector({ streams, activeUrl, onSelect }) {
   const sdStreams = rawSD.map((s) => ({ ...s, quality: 'SD' }))
 
   const total = hdStreams.length + sdStreams.length
-  if (total === 0) return <EmptyState />
+  if (total === 0) return <EmptyState onRefresh={onRefresh} isRefreshing={isRefreshing} />
 
   return (
     <div>
@@ -158,6 +172,10 @@ export default function ServerSelector({ streams, activeUrl, onSelect }) {
         @keyframes srvDot {
           0%,100% { opacity:1; transform:scale(1); }
           50%      { opacity:.25; transform:scale(.55); }
+        }
+        @keyframes srvSpin {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
         }
       `}</style>
 
@@ -172,9 +190,35 @@ export default function ServerSelector({ streams, activeUrl, onSelect }) {
         }}>
           Select Stream
         </span>
-        <span style={{ fontSize: 11, fontWeight: 700, color: '#a78bfa' }}>
-          {total} available
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: '#a78bfa' }}>
+            {total} available
+          </span>
+          {onRefresh && (
+            <button
+              onClick={onRefresh}
+              disabled={isRefreshing}
+              title="Refresh server list"
+              style={{
+                background: 'rgba(0,229,255,0.08)',
+                border: '1px solid rgba(0,229,255,0.2)',
+                borderRadius: 8, padding: '4px 8px',
+                color: '#00e5ff', cursor: isRefreshing ? 'default' : 'pointer',
+                display: 'flex', alignItems: 'center', gap: 4,
+                fontSize: 11, fontWeight: 700, opacity: isRefreshing ? 0.5 : 1,
+                transition: 'opacity .15s',
+              }}
+            >
+              <svg
+                width="13" height="13" viewBox="0 0 24 24" fill="currentColor"
+                style={isRefreshing ? { animation: 'srvSpin 0.8s linear infinite' } : {}}
+              >
+                <path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+              </svg>
+              {isRefreshing ? 'Loading…' : 'Refresh'}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* HD first — best quality on top; line numbers are global across HD+SD */}

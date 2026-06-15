@@ -222,10 +222,12 @@ export default function WatchPage() {
     ...((streams?.SD || []).map((s) => s.url)),
   ], [streams])
 
-  const [activeUrl,    setActiveUrl]    = useState(null)
-  const [activeEmbed,  setActiveEmbed]  = useState(null)
-  const [allExhausted, setAllExhausted] = useState(false)
-  const [mainMode,     setMainMode]     = useState(null) // 'soco'|'sd'|'hd' for main-live
+  const [activeUrl,      setActiveUrl]      = useState(null)
+  const [activeEmbed,    setActiveEmbed]    = useState(null)
+  const [allExhausted,   setAllExhausted]   = useState(false)
+  const [mainMode,       setMainMode]       = useState(null) // 'soco'|'sd'|'hd' for main-live
+  const [retryCountdown, setRetryCountdown] = useState(null) // null | 1..10
+  const [isRefreshing,   setIsRefreshing]   = useState(false)
   const initializedRef = useRef(false)
   const allUrlsRef     = useRef([])
 
@@ -284,25 +286,46 @@ export default function WatchPage() {
     }
   }, [allUrls, id, isMainPage])
 
-  // When all servers exhausted: immediately force-refresh stream URLs from backend.
-  // Re-warm may have already written new CDN tokens — fetch them and restart from server 1.
   const mutateStreamsRef = useRef(mutateStreams)
   useEffect(() => { mutateStreamsRef.current = mutateStreams }, [mutateStreams])
 
-  useEffect(() => {
-    if (!allExhausted) return
-    // Force-fetch fresh stream URLs (bypasses Redis cache on next poll)
-    const t = setTimeout(() => {
-      mutateStreamsRef.current()
-        .then(() => {
-          // After fresh URLs arrive, reset exhausted state so player restarts from URL[0]
+  // Fetch fresh stream URLs then reset player to restart from server 1.
+  const doRefresh = useCallback(() => {
+    setRetryCountdown(null)
+    setIsRefreshing(true)
+    mutateStreamsRef.current()
+      .then((data) => {
+        // Only reset exhausted if we actually got new streams back
+        const hasStreams = data?.SD?.length || data?.HD?.length || data?.embed?.length
+        if (hasStreams) {
           setAllExhausted(false)
-          initializedRef.current = false // allow re-initialization with fresh URLs
-        })
-        .catch(() => {})
-    }, 5000) // wait 5s so backend re-warm has time to finish
-    return () => clearTimeout(t)
-  }, [allExhausted])
+          initializedRef.current = false
+        }
+      })
+      .catch(() => {})
+      .finally(() => setIsRefreshing(false))
+  }, [])
+
+  // When all servers fail: 10s countdown then auto-refresh.
+  // Visible countdown gives users confidence something is happening.
+  useEffect(() => {
+    if (!allExhausted) { setRetryCountdown(null); return }
+    let n = 10
+    setRetryCountdown(n)
+    const id = setInterval(() => {
+      n -= 1
+      if (n <= 0) { clearInterval(id); doRefresh() }
+      else setRetryCountdown(n)
+    }, 1000)
+    return () => clearInterval(id)
+  }, [allExhausted, doRefresh])
+
+  // Manual refresh — cancel countdown and fetch immediately.
+  const handleRefresh = useCallback(() => {
+    setRetryCountdown(null)
+    setAllExhausted(false)
+    doRefresh()
+  }, [doRefresh])
 
   // Stable callback — reads allUrlsRef so allUrls is never a dependency.
   const handleError = useCallback(() => {
@@ -368,7 +391,7 @@ export default function WatchPage() {
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '0 0 80px' }}>
         {/* Video Player / Pre-match Countdown */}
         <div style={{ background: '#000' }}>
-          {match && match.status !== 'live'
+          {match && match.status !== 'live' && !streams?.SD?.length && !streams?.HD?.length && !streams?.embed?.length
             ? <CountdownPanel match={match} />
             : isMainPage && mainMode === 'soco' && match?.stream_page_url
             ? (
@@ -385,7 +408,7 @@ export default function WatchPage() {
               </div>
             )
             : activeUrl
-            ? <VideoPlayer url={activeUrl} isLive={match?.status === 'live'} onError={handleError} allExhausted={allExhausted} />
+            ? <VideoPlayer url={activeUrl} isLive={match?.status === 'live'} onError={handleError} allExhausted={allExhausted} retryCountdown={retryCountdown} onRefresh={handleRefresh} />
             : activeEmbed
             ? (() => {
                 const isFullPage = activeEmbed.includes('sport99.live')
@@ -420,6 +443,18 @@ export default function WatchPage() {
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="rgba(255,255,255,0.15)"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
                 <p style={{ fontSize: 14, fontWeight: 700, color: 'rgba(255,255,255,0.6)', margin: 0 }}>No servers available yet</p>
                 <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', margin: 0, lineHeight: 1.6 }}>Stream will appear at kickoff</p>
+                <button
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  style={{
+                    marginTop: 4, background: 'rgba(0,229,255,0.08)',
+                    border: '1px solid rgba(0,229,255,0.25)', color: '#00e5ff',
+                    borderRadius: 20, padding: '7px 20px', fontSize: 12, fontWeight: 700,
+                    cursor: isRefreshing ? 'default' : 'pointer', opacity: isRefreshing ? 0.5 : 1,
+                  }}
+                >
+                  {isRefreshing ? 'Checking…' : '↻ Refresh'}
+                </button>
               </div>
             )
           }
@@ -533,6 +568,8 @@ export default function WatchPage() {
               streams={streams || { SD: [], HD: [] }}
               activeUrl={activeUrl}
               onSelect={handleSelect}
+              onRefresh={handleRefresh}
+              isRefreshing={isRefreshing}
             />
           </div>
         ) : null}

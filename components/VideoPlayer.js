@@ -22,7 +22,7 @@ const RotateIcon = () => (
   </svg>
 )
 
-const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onError, allExhausted = false }, ref) {
+const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onError, allExhausted = false, retryCountdown = null, onRefresh }, ref) {
   const containerRef    = useRef(null)
   const videoRef        = useRef(null)
   const hlsRef          = useRef(null)
@@ -413,22 +413,40 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
         }}>
           <div style={{ fontSize: 38 }}>📡</div>
           <p style={{ fontSize: 15, fontWeight: 700, color: 'rgba(255,255,255,0.85)', margin: 0 }}>All servers failed</p>
-          <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', margin: 0, lineHeight: 1.7, maxWidth: 260 }}>
-            Live streams can drop between coverage windows.<br />
-            Wait 1–2 minutes and try again — servers usually recover on their own.
-          </p>
-          {onError && (
-            <button
-              onClick={onError}
-              style={{
-                marginTop: 6, background: 'rgba(0,255,135,0.12)',
-                border: '1px solid rgba(0,255,135,0.3)', color: '#00FF87',
-                borderRadius: 20, padding: '8px 22px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
-              }}
-            >
-              Retry
-            </button>
+
+          {retryCountdown != null ? (
+            /* Auto-retry countdown */
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+              <div style={{
+                width: 52, height: 52, borderRadius: '50%',
+                border: '3px solid rgba(0,229,255,0.3)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <span style={{ fontSize: 20, fontWeight: 900, color: '#00e5ff', lineHeight: 1 }}>
+                  {retryCountdown}
+                </span>
+              </div>
+              <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', margin: 0 }}>
+                Refreshing servers in {retryCountdown}s…
+              </p>
+            </div>
+          ) : (
+            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', margin: 0, lineHeight: 1.7, maxWidth: 260 }}>
+              Live streams can drop between coverage windows.<br />
+              Servers usually recover within 1–2 minutes.
+            </p>
           )}
+
+          <button
+            onClick={onRefresh || onError}
+            style={{
+              marginTop: 4, background: 'rgba(0,229,255,0.1)',
+              border: '1px solid rgba(0,229,255,0.3)', color: '#00e5ff',
+              borderRadius: 20, padding: '8px 22px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+            }}
+          >
+            {retryCountdown != null ? 'Refresh Now' : '↻ Refresh'}
+          </button>
         </div>
       )}
     </div>
