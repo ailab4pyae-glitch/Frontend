@@ -6,7 +6,6 @@ import { useAuth, saveToken } from '@/lib/useAuth'
 import Header from '@/components/Header'
 import TabStrip from '@/components/TabStrip'
 import MatchList from '@/components/MatchList'
-import BottomNav from '@/components/BottomNav'
 import AdBanner from '@/components/AdBanner'
 
 function HomeContent() {
@@ -50,7 +49,6 @@ function HomeContent() {
         <MatchList key={activeTab} tab={activeTab} />
       </main>
       {!isPremium && <AdBanner page="home" slot="home_bottom" style={{ padding: '0 16px 8px' }} />}
-      <BottomNav />
     </div>
   )
 }

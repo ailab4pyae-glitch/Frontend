@@ -2,7 +2,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import useSWR from 'swr'
-import { fetcher, apiUrl, formatDate, formatTime } from '@/lib/api'
+import { fetcher, apiUrl, formatDate } from '@/lib/api'
 import { killActiveStream } from '@/lib/player'
 import { useConfig } from '@/lib/config'
 import { useAuth, getToken } from '@/lib/useAuth'
@@ -22,12 +22,12 @@ function CdDigit({ value, mmLabel }) {
       display:'flex', flexDirection:'column', alignItems:'center', gap:4,
       background:'linear-gradient(180deg,rgba(0,229,255,0.07) 0%,rgba(0,229,255,0.02) 100%)',
       border:`1px solid rgba(0,229,255,0.22)`,
-      borderRadius:10, padding:'10px 15px', minWidth:58, position:'relative', overflow:'hidden',
+      borderRadius:10, padding:'clamp(7px,2vw,10px) clamp(10px,3.5vw,15px)', minWidth:'clamp(44px,12vw,58px)', position:'relative', overflow:'hidden',
       boxShadow:'0 0 18px rgba(0,229,255,0.08), inset 0 0 12px rgba(0,229,255,0.04)',
     }}>
       <div style={{ position:'absolute',top:0,left:'15%',right:'15%',height:1,background:`linear-gradient(90deg,transparent,${CYBER},transparent)`,opacity:.7 }}/>
       <span style={{
-        fontSize:34, fontWeight:900, color:'#fff', lineHeight:1, fontVariantNumeric:'tabular-nums',
+        fontSize:'clamp(24px,7.5vw,34px)', fontWeight:900, color:'#fff', lineHeight:1, fontVariantNumeric:'tabular-nums',
         textShadow:`0 0 8px ${CYBER}, 0 0 22px rgba(0,229,255,0.6), 0 0 45px rgba(0,229,255,0.25)`,
         animation:'cdNumGlow 2s ease-in-out infinite',
       }}>{value}</span>
@@ -39,7 +39,7 @@ function CdDigit({ value, mmLabel }) {
 function CdColon() {
   return (
     <span style={{
-      fontSize:26, fontWeight:900, color:`rgba(0,229,255,0.35)`,
+      fontSize:'clamp(18px,5.5vw,26px)', fontWeight:900, color:`rgba(0,229,255,0.35)`,
       textShadow:`0 0 10px ${CYBER}`,
       animation:'cdColonBlink 1s ease-in-out infinite',
       alignSelf:'flex-start', marginTop:10, userSelect:'none',
@@ -74,9 +74,11 @@ function CountdownPanel({ match }) {
 
   return (
     <div style={{
-      aspectRatio:'16/9', position:'relative', overflow:'hidden',
+      position:'relative', overflow:'hidden',
       background:'#06080f',
       display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+      padding:'clamp(18px,5vw,24px) 20px clamp(16px,5vw,22px)',
+      minHeight:'clamp(240px,56.25vw,405px)',
     }}>
       <style>{`
         @keyframes cdGrid  { 0%,100%{opacity:.5} 50%{opacity:.9} }
@@ -158,7 +160,7 @@ function CountdownPanel({ match }) {
 
       {/* Digit countdown */}
       {secs != null && (
-        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12, animation:'cdIn .3s ease .12s both', position:'relative' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:'clamp(4px,1.5vw,8px)', marginBottom:12, animation:'cdIn .3s ease .12s both', position:'relative' }}>
           {h > 0 && <><CdDigit value={pad(h)} mmLabel="နာရီ" /><CdColon /></>}
           <CdDigit value={pad(m)} mmLabel="မိနစ်" />
           <CdColon />
@@ -213,6 +215,7 @@ export default function WatchPage() {
   ], [streams])
 
   const [activeUrl,    setActiveUrl]    = useState(null)
+  const [activeEmbed,  setActiveEmbed]  = useState(null)
   const [allExhausted, setAllExhausted] = useState(false)
   const [mainMode,     setMainMode]     = useState(null) // 'soco'|'sd'|'hd' for main-live
   const initializedRef = useRef(false)
@@ -239,6 +242,13 @@ export default function WatchPage() {
     else if (mainMode === 'hd') setActiveUrl(streams?.HD?.[0]?.url || null)
     else                        setActiveUrl(null) // soco iframe — no video URL
   }, [isMainPage, mainMode, streams])
+
+  // Auto-select first embed stream for sportsrc matches
+  useEffect(() => {
+    if (streams?.embed?.length > 0 && !activeEmbed) {
+      setActiveEmbed(streams.embed[0].url)
+    }
+  }, [streams?.embed]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // When streams load or refresh: if CDN token changed (same base path, different full URL)
   // → auto-switch to the fresh URL. This picks up re-warm tokens without user action.
@@ -368,6 +378,19 @@ export default function WatchPage() {
             )
             : activeUrl
             ? <VideoPlayer url={activeUrl} isLive={match?.status === 'live'} onError={handleError} allExhausted={allExhausted} />
+            : activeEmbed
+            ? (
+              <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', background: '#000' }}>
+                <iframe
+                  key={activeEmbed}
+                  src={activeEmbed}
+                  style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+                  allowFullScreen
+                  allow="autoplay; encrypted-media; fullscreen"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+            )
             : streamsLoading
             ? (
               <div style={{ aspectRatio: '16/9', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, background: '#000' }}>
@@ -416,7 +439,7 @@ export default function WatchPage() {
                   {match.status === 'live'
                     ? <span style={{ color:'#4ade80', textShadow:'0 0 8px rgba(74,222,128,0.6)', fontWeight:700 }}>● Live</span>
                     : match.scheduled_at
-                    ? `⏱ ${formatDate(match.scheduled_at)} · ${formatTime(match.scheduled_at)}`
+                    ? `⏱ ${formatDate(match.scheduled_at)}`
                     : ''}
                 </p>
               </div>
@@ -496,6 +519,36 @@ export default function WatchPage() {
             />
           </div>
         ) : null}
+
+        {/* Embed server selector — SportSRC matches */}
+        {streams?.embed?.length > 0 && (
+          <div style={{ padding: '12px 16px' }}>
+            <p style={{ fontSize: 10, fontWeight: 800, color: 'rgba(255,255,255,0.3)', letterSpacing: 1, textTransform: 'uppercase', margin: '0 0 8px' }}>
+              SERVERS
+            </p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {streams.embed.map((s, i) => {
+                const active = activeEmbed === s.url
+                return (
+                  <button key={s.id || i} onClick={() => setActiveEmbed(s.url)} style={{
+                    flex: 1, minWidth: 72, padding: '10px 8px', borderRadius: 12, cursor: 'pointer',
+                    border: `1.5px solid ${active ? '#00e5ff' : 'rgba(0,229,255,0.2)'}`,
+                    background: active ? 'rgba(0,229,255,0.12)' : 'rgba(0,229,255,0.04)',
+                    boxShadow: active ? '0 0 14px rgba(0,229,255,0.25)' : 'none',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                    transition: 'all .15s',
+                  }}>
+                    <span style={{ fontSize: 16 }}>📺</span>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: active ? '#00e5ff' : 'rgba(255,255,255,0.45)' }}>
+                      Server {i + 1}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {/* VPN tip */}
         <div style={{
           margin: '12px 16px 0',
