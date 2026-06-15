@@ -11,10 +11,10 @@ import VideoPlayer from '@/components/VideoPlayer'
 import ServerSelector from '@/components/ServerSelector'
 import TeamLogo from '@/components/TeamLogo'
 import AdBanner from '@/components/AdBanner'
+import SportSRCDetail from '@/components/SportSRCDetail'
 
 // ── Countdown gaming UI ────────────────────────────────────────────────────────
 const CYBER = '#00e5ff'
-const CYBER2 = '#7c3aed'
 
 function CdDigit({ value, mmLabel }) {
   return (
@@ -209,6 +209,14 @@ export default function WatchPage() {
   const streamsUrl = token ? `${apiUrl.streams(id)}?token=${token}` : apiUrl.streams(id)
   const { data: streams, isLoading: streamsLoading, mutate: mutateStreams } = useSWR(streamsUrl, fetcher, { refreshInterval: 120000, keepPreviousData: true, revalidateOnFocus: false })
 
+  // SportSRC match detail (stats, lineups, events) — only fetched when embed streams exist
+  const isSportsrc = streams?.embed?.length > 0
+  const { data: srcDetail, isLoading: srcDetailLoading } = useSWR(
+    isSportsrc ? apiUrl.sportsrcDetail(id) : null,
+    fetcher,
+    { refreshInterval: 120000, revalidateOnFocus: false }
+  )
+
   const allUrls = useMemo(() => [
     ...((streams?.HD || []).map((s) => s.url)),
     ...((streams?.SD || []).map((s) => s.url)),
@@ -379,18 +387,27 @@ export default function WatchPage() {
             : activeUrl
             ? <VideoPlayer url={activeUrl} isLive={match?.status === 'live'} onError={handleError} allExhausted={allExhausted} />
             : activeEmbed
-            ? (
-              <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', background: '#000' }}>
-                <iframe
-                  key={activeEmbed}
-                  src={activeEmbed}
-                  style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
-                  allowFullScreen
-                  allow="autoplay; encrypted-media; fullscreen"
-                  referrerPolicy="no-referrer"
-                />
-              </div>
-            )
+            ? (() => {
+                const isFullPage = activeEmbed.includes('sport99.live')
+                return (
+                  <div style={{
+                    position: 'relative', width: '100%', background: '#000',
+                    ...(isFullPage
+                      ? { height: 'clamp(540px, 85vh, 800px)' }
+                      : { aspectRatio: '16/9' }),
+                  }}>
+                    <iframe
+                      key={activeEmbed}
+                      src={activeEmbed}
+                      style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+                      allowFullScreen
+                      allow="autoplay; encrypted-media; fullscreen"
+                      referrerPolicy="no-referrer"
+                      sandbox="allow-scripts allow-same-origin allow-presentation allow-popups allow-forms"
+                    />
+                  </div>
+                )
+              })()
             : streamsLoading
             ? (
               <div style={{ aspectRatio: '16/9', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, background: '#000' }}>
@@ -529,24 +546,37 @@ export default function WatchPage() {
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {streams.embed.map((s, i) => {
                 const active = activeEmbed === s.url
+                const rawName = s.source_name && s.source_name !== 'sportsrc' ? s.source_name : ''
+                const label = rawName || `Server ${i + 1}`
+                const icon = label.toLowerCase().includes('fox') ? '🦊'
+                           : label.toLowerCase().includes('ppv') ? '⭐'
+                           : label.toLowerCase().includes('golf') ? '⛳'
+                           : label.toLowerCase().includes('hd') ? '📡'
+                           : '📺'
                 return (
                   <button key={s.id || i} onClick={() => setActiveEmbed(s.url)} style={{
-                    flex: 1, minWidth: 72, padding: '10px 8px', borderRadius: 12, cursor: 'pointer',
+                    flex: 1, minWidth: 80, padding: '10px 8px', borderRadius: 12, cursor: 'pointer',
                     border: `1.5px solid ${active ? '#00e5ff' : 'rgba(0,229,255,0.2)'}`,
                     background: active ? 'rgba(0,229,255,0.12)' : 'rgba(0,229,255,0.04)',
                     boxShadow: active ? '0 0 14px rgba(0,229,255,0.25)' : 'none',
                     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
                     transition: 'all .15s',
                   }}>
-                    <span style={{ fontSize: 16 }}>📺</span>
-                    <span style={{ fontSize: 11, fontWeight: 800, color: active ? '#00e5ff' : 'rgba(255,255,255,0.45)' }}>
-                      Server {i + 1}
+                    <span style={{ fontSize: 16 }}>{icon}</span>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: active ? '#00e5ff' : 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: .5 }}>
+                      {label}
                     </span>
+                    <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)' }}>Server {i + 1}</span>
                   </button>
                 )
               })}
             </div>
           </div>
+        )}
+
+        {/* SportSRC match detail — Stats / Lineups / Events */}
+        {isSportsrc && (
+          <SportSRCDetail data={srcDetail} match={match} loading={srcDetailLoading} />
         )}
 
         {/* VPN tip */}

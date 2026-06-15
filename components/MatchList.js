@@ -3,6 +3,7 @@ import { useMemo, useState, useEffect, useCallback } from 'react'
 import useSWR from 'swr'
 import { fetcher, apiUrl, isSoon } from '@/lib/api'
 import MatchCard from './MatchCard'
+import SportSrcMatchCard from './SportSrcMatchCard'
 import MatchSkeleton from './MatchSkeleton'
 import { translateLeague, leagueFame, leagueIcon } from '@/lib/leagues'
 
@@ -258,8 +259,11 @@ const LeagueSection = ({ league, matches, isMultiSource, fromTab }) => {
           }}>🔥 HOT</span>
         )}
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {matches.map((m) => <MatchCard key={m.id} match={m} multiSource={isMultiSource(m)} fromTab={fromTab} />)}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {matches.map((m) => fromTab === 'sport-src'
+          ? <SportSrcMatchCard key={m.id} match={m} />
+          : <MatchCard key={m.id} match={m} multiSource={isMultiSource(m)} fromTab={fromTab} />
+        )}
       </div>
     </div>
   )
