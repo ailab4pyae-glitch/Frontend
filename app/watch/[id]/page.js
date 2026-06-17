@@ -218,8 +218,9 @@ export default function WatchPage() {
   )
 
   const allUrls = useMemo(() => [
-    ...((streams?.HD || []).map((s) => s.url)),
-    ...((streams?.SD || []).map((s) => s.url)),
+    ...((streams?.HD      || []).map((s) => s.url)),
+    ...((streams?.SD      || []).map((s) => s.url)),
+    ...((streams?.hesgoal || []).map((s) => s.url)),
   ], [streams])
 
   const [activeUrl,      setActiveUrl]      = useState(null)

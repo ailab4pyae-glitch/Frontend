@@ -374,7 +374,7 @@ export default function ScrapersPage() {
 
   useEffect(() => {
     adminFetch('/api/admin/sources')
-      .then((rows) => setSources(rows.filter((s) => ['chinalive', 'socolive'].includes(s.slug))))
+      .then((rows) => setSources(rows.filter((s) => ['chinalive', 'socolive', 'hesgoal'].includes(s.slug))))
       .catch((e) => setError(e.message))
   }, [])
 
