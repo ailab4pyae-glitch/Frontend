@@ -4,7 +4,7 @@ import { activeStream, killActiveStream } from '@/lib/player'
 
 const isHls    = (url) => /\.m3u8(\?|$)/i.test(url) || /\/proxy\/stream\//i.test(url)
 const isIframe = (url) => url && !isHls(url)
-const SWITCH_DELAY = 3
+// No artificial delay between server switches — user sees loading spinner, not an error
 
 const getNetworkTier = () => {
   if (typeof navigator === 'undefined') return 'medium'
@@ -35,10 +35,9 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
   const onErrorRef      = useRef(onError)
   const iosCleanupRef   = useRef(null)
 
-  const [started,   setStarted]   = useState(autoStart)
-  const [loading,   setLoading]   = useState(false)
-  const [error,     setError]     = useState(false)
-  const [countdown, setCountdown] = useState(null)
+  const [started, setStarted] = useState(autoStart)
+  const [loading, setLoading] = useState(false)
+  const [error,   setError]   = useState(false)
 
   useEffect(() => { allExhaustedRef.current = allExhausted }, [allExhausted])
   useEffect(() => { onErrorRef.current = onError },           [onError])
@@ -69,8 +68,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
   }, [])
 
   const clearCountdown = useCallback(() => {
-    if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null }
-    setCountdown(null)
+    if (countdownRef.current) { clearTimeout(countdownRef.current); countdownRef.current = null }
   }, [])
 
   const clearTimers = useCallback(() => {
@@ -95,17 +93,15 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
   const handleError = useCallback(() => switchServer(), [switchServer])
 
   const handleFatalError = useCallback(() => {
+    // Guard against double-firing; silently switch — user sees loading spinner, not an error
     if (countdownRef.current) return
-    if (allExhaustedRef.current) { switchServer(); return }
     clearTimers()
-    setLoading(false)
-    let remaining = SWITCH_DELAY
-    setCountdown(remaining)
-    countdownRef.current = setInterval(() => {
-      remaining -= 1
-      if (remaining <= 0) switchServer()
-      else setCountdown(remaining)
-    }, 1000)
+    setLoading(true)
+    setError(false)
+    countdownRef.current = setTimeout(() => {
+      countdownRef.current = null
+      if (mountedRef.current) switchServer()
+    }, 300)
   }, [switchServer, clearTimers])
 
   const destroyStream = useCallback(() => {
@@ -149,7 +145,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
     hlsRef.current = null
     timersRef.current.forEach(clearInterval); timersRef.current = []
     if (loadTimeoutRef.current) { clearTimeout(loadTimeoutRef.current); loadTimeoutRef.current = null }
-    if (countdownRef.current)   { clearInterval(countdownRef.current);  countdownRef.current = null }
+    if (countdownRef.current)   { clearTimeout(countdownRef.current);  countdownRef.current = null }
   }, [])
 
   useImperativeHandle(ref, () => ({ stop: stopAll }), [stopAll])
@@ -191,7 +187,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
       hlsRef.current = null
       timersRef.current.forEach(clearInterval); timersRef.current = []
       if (loadTimeoutRef.current) { clearTimeout(loadTimeoutRef.current); loadTimeoutRef.current = null }
-      if (countdownRef.current)   { clearInterval(countdownRef.current);  countdownRef.current = null }
+      if (countdownRef.current)   { clearTimeout(countdownRef.current);  countdownRef.current = null }
       const p = plyrRef.current || plyr
       if (p) { try { p.destroy() } catch (_) {} }
       plyrRef.current = null
@@ -348,7 +344,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
         </div>
       )}
 
-      {started && !loading && !error && countdown === null && (
+      {started && !loading && !error && (
         <button
           onClick={handleRotate}
           style={{
@@ -372,36 +368,6 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
         }}>
           <div className="spinner" />
           <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>Connecting to stream…</span>
-        </div>
-      )}
-
-      {countdown !== null && !error && (
-        <div style={{
-          position: 'absolute', inset: 0, zIndex: 30,
-          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          gap: 12, background: 'rgba(10,14,26,0.92)', padding: 24, textAlign: 'center',
-        }}>
-          <div style={{
-            width: 64, height: 64, borderRadius: '50%',
-            border: '3px solid rgba(245,158,11,0.25)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <span style={{ fontSize: 24, fontWeight: 900, color: '#f59e0b', lineHeight: 1 }}>
-              {countdown}
-            </span>
-          </div>
-          <p style={{ fontSize: 14, fontWeight: 600, color: 'rgba(255,255,255,0.7)', margin: 0 }}>Server failed</p>
-          <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', margin: 0 }}>Switching to next server automatically…</p>
-          <button
-            onClick={switchServer}
-            style={{
-              marginTop: 4, background: 'rgba(0,255,135,0.12)',
-              border: '1px solid rgba(0,255,135,0.3)', color: '#00FF87',
-              borderRadius: 20, padding: '8px 22px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
-            }}
-          >
-            Switch Now
-          </button>
         </div>
       )}
 
