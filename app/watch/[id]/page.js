@@ -254,7 +254,12 @@ export default function WatchPage() {
     if (!isMainPage) return
     if (mainMode === 'sd')           setActiveUrl(streams?.SD?.[0]?.url || null)
     else if (mainMode === 'hd')      setActiveUrl(streams?.HD?.[0]?.url || null)
-    else if (mainMode === 'hesgoal') setActiveUrl(streams?.hesgoal?.[0]?.url || null)
+    else if (mainMode === 'hesgoal') {
+      // Don't override a channel the user manually picked
+      if (!streams?.hesgoal?.some(s => s.url === activeUrl)) {
+        setActiveUrl(streams?.hesgoal?.[0]?.url || null)
+      }
+    }
     else                             setActiveUrl(null) // soco iframe — no video URL
   }, [isMainPage, mainMode, streams])
 
@@ -516,6 +521,7 @@ export default function WatchPage() {
 
         {/* Stream selector — only shown for live matches */}
         {match?.status === 'live' && isMainPage ? (
+          <>
           <div style={{ padding: '14px 16px', display: 'flex', gap: 10 }}>
             {/* SOCO button */}
             {match?.stream_page_url && (() => {
@@ -590,15 +596,65 @@ export default function WatchPage() {
               )
             })()}
           </div>
+          {/* Per-channel buttons shown when HES Goal is active */}
+          {mainMode === 'hesgoal' && streams?.hesgoal?.length > 0 && (
+            <div style={{ padding: '0 16px 14px', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {streams.hesgoal.map((s, i) => {
+                const active = activeUrl === s.url
+                return (
+                  <button key={s.id} onClick={() => { killActiveStream(); setMainMode('hesgoal'); setActiveUrl(s.url) }} style={{
+                    padding: '8px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 700,
+                    border: `1.5px solid ${active ? '#00e5ff' : 'rgba(0,229,255,0.25)'}`,
+                    background: active ? 'rgba(0,229,255,0.18)' : 'rgba(0,229,255,0.06)',
+                    color: active ? '#00e5ff' : 'rgba(255,255,255,0.55)',
+                    boxShadow: active ? '0 0 12px rgba(0,229,255,0.25)' : 'none',
+                    transition: 'all .15s',
+                  }}>
+                    {s.label || `Server ${i + 1}`}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+          </>
         ) : match?.status === 'live' ? (
           <div style={{ padding: 16 }}>
-            <ServerSelector
-              streams={streams || { SD: [], HD: [] }}
-              activeUrl={activeUrl}
-              onSelect={handleSelect}
-              onRefresh={handleRefresh}
-              isRefreshing={isRefreshing}
-            />
+            {streams?.hesgoal?.length > 0 ? (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: 'rgba(255,255,255,0.4)', letterSpacing: 1, textTransform: 'uppercase' }}>Select Channel</span>
+                  <button onClick={handleRefresh} disabled={isRefreshing} style={{ background: 'rgba(0,229,255,0.08)', border: '1px solid rgba(0,229,255,0.2)', borderRadius: 8, padding: '4px 10px', color: '#00e5ff', fontSize: 11, fontWeight: 700, cursor: 'pointer', opacity: isRefreshing ? 0.5 : 1 }}>
+                    {isRefreshing ? 'Loading…' : '↻ Refresh'}
+                  </button>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+                  {streams.hesgoal.map((s, i) => {
+                    const active = activeUrl === s.url
+                    return (
+                      <button key={s.id} onClick={() => { killActiveStream(); setActiveUrl(s.url) }} style={{
+                        padding: '14px 10px', borderRadius: 10, cursor: 'pointer',
+                        border: `1.5px solid ${active ? '#00e5ff' : 'rgba(255,255,255,0.1)'}`,
+                        background: active ? 'rgba(0,229,255,0.15)' : 'rgba(255,255,255,0.04)',
+                        color: active ? '#00e5ff' : 'rgba(255,255,255,0.75)',
+                        fontSize: 13, fontWeight: 700, textAlign: 'center',
+                        boxShadow: active ? '0 0 14px rgba(0,229,255,0.25)' : 'none',
+                        transition: 'all .15s',
+                      }}>
+                        {s.label || `Server ${i + 1}`}
+                      </button>
+                    )
+                  })}
+                </div>
+              </>
+            ) : (
+              <ServerSelector
+                streams={streams || { SD: [], HD: [] }}
+                activeUrl={activeUrl}
+                onSelect={handleSelect}
+                onRefresh={handleRefresh}
+                isRefreshing={isRefreshing}
+              />
+            )}
           </div>
         ) : null}
 
