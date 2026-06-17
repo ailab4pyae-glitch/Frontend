@@ -25,8 +25,25 @@ const BLANK = (type = 'tv') => ({
   country: 'Myanmar', language: 'Burmese',
 })
 
-function ChannelRow({ ch, onEdit, onDelete, onToggle }) {
+function ChannelRow({ ch, onEdit, onDelete, onToggle, onLogoFetched }) {
   const hasStream = !!ch.stream_url
+  const [fetching, setFetching] = useState(false)
+  const [fetchMsg, setFetchMsg] = useState('')
+
+  const fetchLogo = async () => {
+    setFetching(true); setFetchMsg('')
+    try {
+      const res = await adminFetch(`/api/admin/tv/${ch.id}/fetch-logo`, { method: 'POST' })
+      if (res.logo_url) {
+        onLogoFetched(ch.id, res.logo_url)
+        setFetchMsg('✓')
+      } else {
+        setFetchMsg('–')
+      }
+    } catch { setFetchMsg('!') }
+    finally { setFetching(false); setTimeout(() => setFetchMsg(''), 3000) }
+  }
+
   return (
     <div style={{
       background: '#141824', borderRadius: 10,
@@ -35,13 +52,18 @@ function ChannelRow({ ch, onEdit, onDelete, onToggle }) {
       display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
       opacity: ch.is_active ? 1 : 0.55,
     }}>
-      {/* Emoji + colour swatch */}
+      {/* Logo preview or emoji */}
       <div style={{
-        width: 40, height: 40, borderRadius: 10, flexShrink: 0,
-        background: ch.color + '22', border: `1px solid ${ch.color}55`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20,
+        width: 44, height: 44, borderRadius: 10, flexShrink: 0,
+        background: ch.color + '22', border: `1px solid ${ch.color}44`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        overflow: 'hidden',
       }}>
-        {ch.emoji}
+        {ch.logo_url
+          ? <img src={ch.logo_url} alt={ch.name} style={{ width: 36, height: 36, objectFit: 'contain' }}
+              onError={e => { e.target.style.display = 'none' }} />
+          : <span style={{ fontSize: 20 }}>{ch.emoji}</span>
+        }
       </div>
 
       {/* Info */}
@@ -53,6 +75,9 @@ function ChannelRow({ ch, onEdit, onDelete, onToggle }) {
             background: ch.type === 'tv' ? 'rgba(96,165,250,0.15)' : 'rgba(245,158,11,0.15)',
             color: ch.type === 'tv' ? '#60a5fa' : '#f59e0b',
           }}>{ch.type.toUpperCase()}</span>
+          {ch.logo_url && (
+            <span style={{ fontSize: 10, color: '#00FF87', fontWeight: 700 }}>🖼 logo</span>
+          )}
         </div>
         <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 2 }}>
           {ch.category} · #{ch.position}
@@ -76,7 +101,16 @@ function ChannelRow({ ch, onEdit, onDelete, onToggle }) {
       </span>
 
       {/* Actions */}
-      <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+      <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
+        {/* Fetch logo */}
+        <button onClick={fetchLogo} disabled={fetching} title="Auto-fetch logo from Wikipedia" style={{
+          border: '1px solid rgba(251,191,36,0.3)', borderRadius: 7, padding: '5px 10px',
+          fontSize: 11, fontWeight: 700, background: 'rgba(251,191,36,0.08)',
+          color: fetchMsg === '✓' ? '#00FF87' : fetchMsg === '–' ? 'rgba(255,255,255,0.3)' : '#fbbf24',
+          cursor: fetching ? 'not-allowed' : 'pointer', minWidth: 52, textAlign: 'center',
+        }}>
+          {fetching ? '…' : fetchMsg || '🔍 Logo'}
+        </button>
         <button onClick={() => onToggle(ch)} style={{
           border: `1px solid ${ch.is_active ? 'rgba(0,255,135,0.3)' : 'rgba(255,255,255,0.15)'}`,
           borderRadius: 7, padding: '5px 10px', fontSize: 11, fontWeight: 700,
@@ -292,6 +326,8 @@ export default function AdminTVPage() {
   const [search, setSearch]     = useState('')
   const [modal, setModal]       = useState(null)    // null | channel object
   const [error, setError]       = useState('')
+  const [bulkFetching, setBulkFetching] = useState(false)
+  const [bulkMsg, setBulkMsg]   = useState('')
 
   const load = () =>
     adminFetch('/api/admin/tv')
@@ -315,6 +351,19 @@ export default function AdminTVPage() {
       method: 'PUT', body: JSON.stringify({ is_active: !ch.is_active }),
     }).catch((e) => { setError(e.message); return null })
     if (updated) setChannels((prev) => prev.map((c) => c.id === ch.id ? updated : c))
+  }
+
+  const logoFetched = (id, logo_url) =>
+    setChannels(prev => prev.map(c => c.id === id ? { ...c, logo_url } : c))
+
+  const bulkFetch = async () => {
+    setBulkFetching(true); setBulkMsg('')
+    try {
+      const res = await adminFetch('/api/admin/tv/fetch-logos-bulk', { method: 'POST' })
+      setBulkMsg(`✓ ${res.updated} logos found`)
+      await load()
+    } catch (e) { setBulkMsg('Failed') }
+    finally { setBulkFetching(false) }
   }
 
   const del = async (ch) => {
@@ -351,12 +400,22 @@ export default function AdminTVPage() {
             Manage live TV and radio stream URLs
           </p>
         </div>
-        <button onClick={() => setModal(BLANK(filter === 'radio' ? 'radio' : 'tv'))} style={{
-          border: 'none', borderRadius: 10, padding: '10px 20px',
-          background: '#00FF87', color: '#0A0E1A', fontWeight: 700, fontSize: 14, cursor: 'pointer',
-        }}>
-          + Add Channel
-        </button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {bulkMsg && <span style={{ fontSize: 12, color: '#00FF87' }}>{bulkMsg}</span>}
+          <button onClick={bulkFetch} disabled={bulkFetching} style={{
+            border: '1px solid rgba(251,191,36,0.4)', borderRadius: 10, padding: '10px 16px',
+            background: 'rgba(251,191,36,0.1)', color: '#fbbf24',
+            fontWeight: 700, fontSize: 13, cursor: bulkFetching ? 'not-allowed' : 'pointer',
+          }}>
+            {bulkFetching ? '🔍 Searching…' : '🔍 Fetch All Logos'}
+          </button>
+          <button onClick={() => setModal(BLANK(filter === 'radio' ? 'radio' : 'tv'))} style={{
+            border: 'none', borderRadius: 10, padding: '10px 20px',
+            background: '#00FF87', color: '#0A0E1A', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+          }}>
+            + Add Channel
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -418,6 +477,7 @@ export default function AdminTVPage() {
                 onEdit={(c) => setModal({ ...c, logo_url: c.logo_url || '', stream_url: c.stream_url || '' })}
                 onDelete={del}
                 onToggle={toggle}
+                onLogoFetched={logoFetched}
               />
             ))}
           </div>

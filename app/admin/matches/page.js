@@ -157,6 +157,10 @@ function MatchRow({ match, onDelete, onStreamAdded }) {
   const [sLoading, setSLoading]       = useState(false)
   const [sError, setSError]           = useState('')
   const [playingStream, setPlaying]   = useState(null)
+  const [hesUrl, setHesUrl]           = useState('')
+  const [hesScraping, setHesScraping] = useState(false)
+  const [hesResult, setHesResult]     = useState(null)
+  const [hesError, setHesError]       = useState('')
 
   const loadStreams = useCallback(async () => {
     const data = await adminFetch(`/api/admin/matches/${match.id}/streams`)
@@ -166,6 +170,20 @@ function MatchRow({ match, onDelete, onStreamAdded }) {
   const toggleOpen = () => {
     if (!open && !streams) loadStreams()
     setOpen((v) => !v)
+  }
+
+  const scrapeHesgoal = async (e) => {
+    e.preventDefault()
+    setHesError(''); setHesResult(null); setHesScraping(true)
+    try {
+      const data = await adminFetch(`/api/admin/matches/${match.id}/scrape-hesgoal`, {
+        method: 'POST', body: JSON.stringify({ url: hesUrl }),
+      })
+      setHesResult(data.stream)
+      await loadStreams()
+      onStreamAdded?.()
+    } catch (err) { setHesError(err.message) }
+    finally { setHesScraping(false) }
   }
 
   const addStream = async (e) => {
@@ -270,6 +288,41 @@ function MatchRow({ match, onDelete, onStreamAdded }) {
                 <button onClick={() => deleteStream(s.id)} style={btn('danger', { padding: '4px 8px', fontSize: 11 })}>✕</button>
               </div>
             ))}
+
+            {/* HES-GOAL scraper */}
+            <div style={{ marginTop: 16, padding: '12px 14px', borderRadius: 8, background: 'rgba(0,229,255,0.04)', border: '1px solid rgba(0,229,255,0.12)' }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: 'rgba(0,229,255,0.7)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>
+                🎯 HES-GOAL Scraper
+              </div>
+              <form onSubmit={scrapeHesgoal} style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <input
+                  placeholder="https://hes-goal.one/match-page-url"
+                  value={hesUrl}
+                  onChange={(e) => { setHesUrl(e.target.value); setHesResult(null); setHesError('') }}
+                  required
+                  style={input({ flex: '1 1 260px', borderColor: 'rgba(0,229,255,0.2)' })}
+                />
+                <button type="submit" disabled={hesScraping} style={{
+                  ...btn('ghost'),
+                  borderColor: 'rgba(0,229,255,0.35)', color: '#00e5ff',
+                  background: hesScraping ? 'rgba(0,229,255,0.04)' : 'rgba(0,229,255,0.08)',
+                  flexShrink: 0,
+                }}>
+                  {hesScraping ? '⏳ Scraping…' : '🔍 Scrape m3u8'}
+                </button>
+              </form>
+              {hesResult && (
+                <div style={{ marginTop: 8, fontSize: 12, color: '#00FF87', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <span>✅ Found: <span style={{ fontFamily: 'monospace', color: 'rgba(255,255,255,0.6)', wordBreak: 'break-all' }}>{hesResult.url}</span></span>
+                  {hesResult.expires_at && (
+                    <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 11 }}>
+                      Expires: {new Date(hesResult.expires_at).toLocaleString()}
+                    </span>
+                  )}
+                </div>
+              )}
+              {hesError && <div style={{ color: '#ff6b6b', fontSize: 12, marginTop: 6 }}>{hesError}</div>}
+            </div>
 
             {/* Add stream form */}
             <form onSubmit={addStream} style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>

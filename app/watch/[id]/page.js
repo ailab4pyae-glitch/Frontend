@@ -225,9 +225,11 @@ export default function WatchPage() {
   const [activeUrl,      setActiveUrl]      = useState(null)
   const [activeEmbed,    setActiveEmbed]    = useState(null)
   const [allExhausted,   setAllExhausted]   = useState(false)
-  const [mainMode,       setMainMode]       = useState(null) // 'soco'|'sd'|'hd' for main-live
+  const [mainMode,       setMainMode]       = useState(null) // 'soco'|'sd'|'hd'|'hesgoal' for main-live
   const [retryCountdown, setRetryCountdown] = useState(null) // null | 1..10
   const [isRefreshing,   setIsRefreshing]   = useState(false)
+  const [playerKey,      setPlayerKey]      = useState(0)   // increment to force VideoPlayer remount
+  const [autoRestart,    setAutoRestart]    = useState(false)
   const initializedRef = useRef(false)
   const allUrlsRef     = useRef([])
 
@@ -241,6 +243,7 @@ export default function WatchPage() {
     if (!isMainPage) return
     if (mainMode === null && (match || streams)) {
       if (match?.stream_page_url) setMainMode('soco')
+      else if (streams?.hesgoal?.length) setMainMode('hesgoal')
       else if (streams?.SD?.length) setMainMode('sd')
       else if (streams?.HD?.length) setMainMode('hd')
     }
@@ -248,9 +251,10 @@ export default function WatchPage() {
 
   useEffect(() => {
     if (!isMainPage) return
-    if (mainMode === 'sd')       setActiveUrl(streams?.SD?.[0]?.url || null)
-    else if (mainMode === 'hd') setActiveUrl(streams?.HD?.[0]?.url || null)
-    else                        setActiveUrl(null) // soco iframe — no video URL
+    if (mainMode === 'sd')           setActiveUrl(streams?.SD?.[0]?.url || null)
+    else if (mainMode === 'hd')      setActiveUrl(streams?.HD?.[0]?.url || null)
+    else if (mainMode === 'hesgoal') setActiveUrl(streams?.hesgoal?.[0]?.url || null)
+    else                             setActiveUrl(null) // soco iframe — no video URL
   }, [isMainPage, mainMode, streams])
 
   // Auto-select first embed stream for sportsrc matches
@@ -300,6 +304,11 @@ export default function WatchPage() {
         if (hasStreams) {
           setAllExhausted(false)
           initializedRef.current = false
+          // Force VideoPlayer remount so it restarts even if the proxy URL is unchanged.
+          // Without this, the url prop stays the same → useEffect([url]) never fires →
+          // player stays frozen on the error screen (most visible on mobile).
+          setAutoRestart(true)
+          setPlayerKey((k) => k + 1)
         }
       })
       .catch(() => {})
@@ -408,7 +417,7 @@ export default function WatchPage() {
               </div>
             )
             : activeUrl
-            ? <VideoPlayer url={activeUrl} isLive={match?.status === 'live'} onError={handleError} allExhausted={allExhausted} retryCountdown={retryCountdown} onRefresh={handleRefresh} />
+            ? <VideoPlayer key={playerKey} url={activeUrl} isLive={match?.status === 'live'} onError={handleError} allExhausted={allExhausted} retryCountdown={retryCountdown} onRefresh={handleRefresh} autoStart={autoRestart} />
             : activeEmbed
             ? (() => {
                 const isFullPage = activeEmbed.includes('sport99.live')
@@ -558,6 +567,24 @@ export default function WatchPage() {
                   <span style={{ fontSize: 18 }}>🎬</span>
                   <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#e879f9' : 'rgba(255,255,255,0.5)' }}>HD</span>
                   <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>China</span>
+                </button>
+              )
+            })()}
+            {/* HES-GOAL button */}
+            {streams?.hesgoal?.length > 0 && (() => {
+              const active = mainMode === 'hesgoal'
+              return (
+                <button onClick={() => { killActiveStream(); setMainMode('hesgoal') }} style={{
+                  flex: 1, padding: '12px 8px', borderRadius: 12, cursor: 'pointer',
+                  border: `1.5px solid ${active ? '#00e5ff' : 'rgba(0,229,255,0.3)'}`,
+                  background: active ? 'rgba(0,229,255,0.18)' : 'rgba(0,229,255,0.07)',
+                  boxShadow: active ? '0 0 18px rgba(0,229,255,0.3)' : 'none',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                  transition: 'all .15s',
+                }}>
+                  <span style={{ fontSize: 18 }}>⚽</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#00e5ff' : 'rgba(255,255,255,0.5)' }}>HES</span>
+                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>Goal</span>
                 </button>
               )
             })()}

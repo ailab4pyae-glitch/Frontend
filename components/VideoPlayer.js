@@ -22,7 +22,7 @@ const RotateIcon = () => (
   </svg>
 )
 
-const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onError, allExhausted = false, retryCountdown = null, onRefresh }, ref) {
+const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onError, allExhausted = false, retryCountdown = null, onRefresh, autoStart = false }, ref) {
   const containerRef    = useRef(null)
   const videoRef        = useRef(null)
   const hlsRef          = useRef(null)
@@ -35,7 +35,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ url, isLive = false, onErr
   const onErrorRef      = useRef(onError)
   const iosCleanupRef   = useRef(null)
 
-  const [started,   setStarted]   = useState(false)
+  const [started,   setStarted]   = useState(autoStart)
   const [loading,   setLoading]   = useState(false)
   const [error,     setError]     = useState(false)
   const [countdown, setCountdown] = useState(null)
