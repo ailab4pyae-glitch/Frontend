@@ -249,9 +249,11 @@ export default function WatchPage() {
   useEffect(() => {
     if (!isMainPage) return
     if (mainMode === null && (match || streams)) {
-      const engHd = streams?.hesgoal?.find(s => s.label === 'Mobile 1')
-      const arHd  = streams?.hesgoal?.find(s => s.label === 'Mobile 2')
-      if (engHd)                       setMainMode('eng-hd')
+      const eng720  = streams?.hesgoal?.find(s => s.label === 'English 720')
+      const eng1080 = streams?.hesgoal?.find(s => s.label === 'English 1080')
+      const arHd    = streams?.hesgoal?.find(s => s.label?.startsWith('Mobile'))
+      if (eng720)                      setMainMode('eng-720')
+      else if (eng1080)                setMainMode('eng-1080')
       else if (arHd)                   setMainMode('ar-hd')
       else if (streams?.HD?.length)    setMainMode('china-hd')
       else if (streams?.SD?.length)    setMainMode('china-sd')
@@ -261,9 +263,11 @@ export default function WatchPage() {
 
   useEffect(() => {
     if (!isMainPage) return
-    const engHd = streams?.hesgoal?.find(s => s.label === 'Mobile 1')
-    const arHd  = streams?.hesgoal?.find(s => s.label === 'Mobile 2')
-    if (mainMode === 'eng-hd')        setActiveUrl(engHd?.url || null)
+    const eng1080 = streams?.hesgoal?.find(s => s.label === 'English 1080')
+    const eng720  = streams?.hesgoal?.find(s => s.label === 'English 720')
+    const arHd    = streams?.hesgoal?.find(s => s.label?.startsWith('Mobile'))
+    if (mainMode === 'eng-1080')      setActiveUrl(eng1080?.url || null)
+    else if (mainMode === 'eng-720')  setActiveUrl(eng720?.url || null)
     else if (mainMode === 'ar-hd')    setActiveUrl(arHd?.url || null)
     else if (mainMode === 'china-hd') setActiveUrl(streams?.HD?.[0]?.url || null)
     else if (mainMode === 'china-sd') setActiveUrl(streams?.SD?.[0]?.url || null)
@@ -529,11 +533,11 @@ export default function WatchPage() {
         {/* Stream selector — only shown for live matches */}
         {match?.status === 'live' && isMainPage ? (
           <div style={{ padding: '14px 16px', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            {/* English HD — HESGoal Mobile 1 */}
-            {streams?.hesgoal?.find(s => s.label === 'Mobile 1') && (() => {
-              const active = mainMode === 'eng-hd'
+            {/* English HD 1080p — HESGoal fixed Rumble 1080p */}
+            {streams?.hesgoal?.find(s => s.label === 'English 1080') && (() => {
+              const active = mainMode === 'eng-1080'
               return (
-                <button onClick={() => { killActiveStream(); setMainMode('eng-hd') }} style={{
+                <button onClick={() => { killActiveStream(); setMainMode('eng-1080') }} style={{
                   flex: 1, padding: '12px 8px', borderRadius: 12, cursor: 'pointer',
                   border: `1.5px solid ${active ? '#00e5ff' : 'rgba(0,229,255,0.3)'}`,
                   background: active ? 'rgba(0,229,255,0.18)' : 'rgba(0,229,255,0.07)',
@@ -542,13 +546,31 @@ export default function WatchPage() {
                   transition: 'all .15s',
                 }}>
                   <span style={{ fontSize: 18 }}>🏴󠁧󠁢󠁥󠁮󠁧󠁿</span>
-                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#00e5ff' : 'rgba(255,255,255,0.5)' }}>English</span>
-                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>HD</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#00e5ff' : 'rgba(255,255,255,0.5)' }}>English HD</span>
+                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>1080p</span>
                 </button>
               )
             })()}
-            {/* Arab HD — HESGoal Mobile 2 */}
-            {streams?.hesgoal?.find(s => s.label === 'Mobile 2') && (() => {
+            {/* English HD 720p — HESGoal fixed Rumble 720p (DEFAULT) */}
+            {streams?.hesgoal?.find(s => s.label === 'English 720') && (() => {
+              const active = mainMode === 'eng-720'
+              return (
+                <button onClick={() => { killActiveStream(); setMainMode('eng-720') }} style={{
+                  flex: 1, padding: '12px 8px', borderRadius: 12, cursor: 'pointer',
+                  border: `1.5px solid ${active ? '#00e5ff' : 'rgba(0,229,255,0.3)'}`,
+                  background: active ? 'rgba(0,229,255,0.18)' : 'rgba(0,229,255,0.07)',
+                  boxShadow: active ? '0 0 18px rgba(0,229,255,0.3)' : 'none',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                  transition: 'all .15s',
+                }}>
+                  <span style={{ fontSize: 18 }}>🏴󠁧󠁢󠁥󠁮󠁧󠁿</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#00e5ff' : 'rgba(255,255,255,0.5)' }}>English HD</span>
+                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>720p</span>
+                </button>
+              )
+            })()}
+            {/* Arab HD 720p — HESGoal Arabic scraped stream */}
+            {streams?.hesgoal?.find(s => s.label?.startsWith('Mobile')) && (() => {
               const active = mainMode === 'ar-hd'
               return (
                 <button onClick={() => { killActiveStream(); setMainMode('ar-hd') }} style={{
@@ -560,12 +582,12 @@ export default function WatchPage() {
                   transition: 'all .15s',
                 }}>
                   <span style={{ fontSize: 18 }}>🇸🇦</span>
-                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#22c55e' : 'rgba(255,255,255,0.5)' }}>Arab</span>
-                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>HD</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#22c55e' : 'rgba(255,255,255,0.5)' }}>Arab HD</span>
+                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>720p</span>
                 </button>
               )
             })()}
-            {/* China HD */}
+            {/* China HD 720p */}
             {streams?.HD?.length > 0 && (() => {
               const active = mainMode === 'china-hd'
               return (
@@ -578,12 +600,12 @@ export default function WatchPage() {
                   transition: 'all .15s',
                 }}>
                   <span style={{ fontSize: 18 }}>🎬</span>
-                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#e879f9' : 'rgba(255,255,255,0.5)' }}>China</span>
-                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>HD</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#e879f9' : 'rgba(255,255,255,0.5)' }}>China HD</span>
+                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>720p</span>
                 </button>
               )
             })()}
-            {/* China SD */}
+            {/* China SD 480p */}
             {streams?.SD?.length > 0 && (() => {
               const active = mainMode === 'china-sd'
               return (
@@ -596,8 +618,8 @@ export default function WatchPage() {
                   transition: 'all .15s',
                 }}>
                   <span style={{ fontSize: 18 }}>📺</span>
-                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#a78bfa' : 'rgba(255,255,255,0.5)' }}>China</span>
-                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>SD</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#a78bfa' : 'rgba(255,255,255,0.5)' }}>China SD</span>
+                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>480p</span>
                 </button>
               )
             })()}
