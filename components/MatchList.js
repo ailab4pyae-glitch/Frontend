@@ -473,7 +473,7 @@ export default function MatchList({ tab }) {
           {/* Search bar */}
           <div style={{
             padding: '10px 16px 6px',
-            position: 'sticky', top: 52, zIndex: 20, background: 'var(--bg)',
+            position: 'sticky', top: 53, zIndex: 20, background: 'var(--bg)',
           }}>
             <div style={{
               display: 'flex', alignItems: 'center', gap: 8,

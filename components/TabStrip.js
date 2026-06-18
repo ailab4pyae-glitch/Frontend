@@ -11,7 +11,7 @@ export default function TabStrip({ tabs = [], activeTab, onTabChange }) {
       `}</style>
 
       <div style={{
-        position: 'sticky', top: 96, zIndex: 90,
+        position: 'sticky', top: 0, zIndex: 90,
         background: 'linear-gradient(180deg, var(--bg) 0%, transparent 100%)',
         backdropFilter: 'blur(12px)',
         WebkitBackdropFilter: 'blur(12px)',
