@@ -1,7 +1,6 @@
 'use client'
 import { memo } from 'react'
 import { useRouter } from 'next/navigation'
-import LiveBadge from './LiveBadge'
 import { proxyLogo, isSoon } from '../lib/api'
 import { useConfig } from '../lib/config'
 import TeamLogo from './TeamLogo'
@@ -11,250 +10,236 @@ const localTime = (iso) => {
   if (!iso) return ''
   return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true })
 }
-
-
 const localDate = (iso) => {
   if (!iso) return ''
   const d = new Date(iso)
-  const today    = new Date(); today.setHours(0,0,0,0)
-  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1)
-  d.setHours(0,0,0,0)
-  if (d.getTime() === today.getTime())    return 'Today'
-  if (d.getTime() === tomorrow.getTime()) return 'Tomorrow'
-  return new Date(iso).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
+  const day   = String(d.getDate()).padStart(2, '0')
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const year  = d.getFullYear()
+  const wday  = d.toLocaleDateString(undefined, { weekday: 'long' })
+  return `${day}/${month}/${year} (${wday})`
 }
 
 function MatchCard({ match, multiSource = false, fromTab = '' }) {
-  const router         = useRouter()
-  const { tabMap }  = useConfig()
-  const sourceTab   = tabMap[match.source_tab]
+  const router     = useRouter()
+  const { tabMap } = useConfig()
+  const sourceTab  = tabMap[match.source_tab]
 
   const isLive     = match.status === 'live'
   const isFinished = match.status === 'finished'
   const soon       = !isLive && !isFinished && isSoon(match.scheduled_at)
-
   const league     = translateLeague(match.league) || ''
   const icon       = leagueIcon(league)
   const timeStr    = localTime(match.scheduled_at)
   const dateStr    = localDate(match.scheduled_at)
   const hasScore   = match.score_home != null && match.score_away != null
 
+  const topBar   = isLive ? 'linear-gradient(90deg,#00c853,#00e5ff)'
+                 : soon   ? 'linear-gradient(90deg,#f59e0b,#f97316)'
+                          : 'linear-gradient(90deg,#6366f1,#a855f7)'
+  const statusColor  = isLive ? '#16a34a' : soon ? '#d97706' : '#6366f1'
+  const statusBg     = isLive ? '#dcfce7'  : soon ? '#fef3c7'  : '#ede9fe'
+  const statusLabel  = isLive ? '🔴 LIVE'  : soon ? '⏱ SOON'  : isFinished ? 'FT' : 'Upcoming'
+  const timeColor    = isLive ? '#dc2626'  : soon ? '#d97706'  : '#4f46e5'
+
   return (
-    <div
-      className="fade-in"
-      onClick={() => router.push(`/watch/${match.id}${fromTab ? `?from=${fromTab}` : ''}`)}
-      style={{
-        background: isLive ? 'linear-gradient(145deg, #141824 0%, #1a1228 100%)' : '#141824',
-        borderRadius: 16,
-        border: `1px solid ${
-          isLive     ? 'rgba(0,255,135,0.18)' :
-          soon       ? 'rgba(245,158,11,0.2)' :
-          isFinished ? 'rgba(255,255,255,0.04)' :
-                       'rgba(255,255,255,0.07)'
-        }`,
-        padding: '14px 16px',
-        cursor: 'pointer',
-        transition: 'all .2s',
-        display: 'flex', flexDirection: 'column', gap: 10,
-        position: 'relative', overflow: 'hidden',
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = 'rgba(0,255,135,0.3)'
-        e.currentTarget.style.transform = 'translateY(-1px)'
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = isLive ? 'rgba(0,255,135,0.18)' : soon ? 'rgba(245,158,11,0.2)' : 'rgba(255,255,255,0.07)'
-        e.currentTarget.style.transform = 'translateY(0)'
-      }}
-    >
+    <>
+      <style>{`
+        @keyframes mcPop { from{opacity:0;transform:scale(.97)} to{opacity:1;transform:scale(1)} }
+        @keyframes liveTopBar { 0%,100%{opacity:.8} 50%{opacity:1} }
+        .mc-card { animation: mcPop .2s ease both; transition: all .18s ease !important; }
+        .mc-card:hover { transform: translateY(-3px) !important; box-shadow: 0 12px 40px rgba(99,102,241,0.25) !important; }
+        .mc-card:hover .mc-watch { background: #4f46e5 !important; color: #fff !important; border-color: #4f46e5 !important; }
+      `}</style>
 
-      {/* Top — league/cup name */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
-          {isLive && (
-            <span style={{
-              display: 'inline-block', width: 6, height: 6, borderRadius: '50%',
-              background: '#00FF87',
-              animation: 'livePulse 1.4s ease-in-out infinite',
-              flexShrink: 0,
-            }} />
-          )}
-          <span style={{ fontSize: 11, marginRight: 2 }}>{icon}</span>
-          <span style={{
-            fontSize: 11, fontWeight: 700,
-            color: isLive ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.4)',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            textTransform: 'uppercase', letterSpacing: 0.4,
-          }}>
-            {league || sourceTab?.name || 'Football'}
-          </span>
-        </div>
-        <LiveBadge status={match.status} scheduledAt={match.scheduled_at} />
-      </div>
-
-      {/* Teams + Score */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-
-        {/* Home team */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
-          <TeamLogo src={proxyLogo(match.home_logo)} name={match.home_team} />
-          <span style={{
-            fontSize: 11, fontWeight: 700, textAlign: 'center',
-            color: 'rgba(255,255,255,0.9)',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            maxWidth: '100%',
-          }}>
-            {match.home_team || 'Home'}
-          </span>
-        </div>
-
-        {/* Centre — score / time */}
+      <div
+        className="mc-card"
+        onClick={() => router.push(`/watch/${match.id}${fromTab ? `?from=${fromTab}` : ''}`)}
+        style={{
+          background: '#ffffff',
+          borderRadius: 14,
+          overflow: 'hidden',
+          boxShadow: '0 4px 20px rgba(17,14,43,0.18)',
+          border: '1px solid rgba(99,102,241,0.12)',
+          cursor: 'pointer',
+          position: 'relative',
+        }}
+      >
+        {/* Coloured top accent bar */}
         <div style={{
-          flexShrink: 0, display: 'flex', flexDirection: 'column',
-          alignItems: 'center', gap: 5, minWidth: 80,
+          height: 3, background: topBar,
+          animation: isLive ? 'liveTopBar 2s ease-in-out infinite' : 'none',
+        }} />
+
+        {/* Header: League + Status */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '9px 12px 8px',
+          background: '#f8f7ff',
+          borderBottom: '1px solid rgba(99,102,241,0.08)',
         }}>
-          {isLive ? (
-            <>
-              {/* Score */}
-              <span style={{
-                fontSize: 26, fontWeight: 900, letterSpacing: 3, lineHeight: 1,
-                color: multiSource ? '#FFD700' : '#fff',
-                textShadow: multiSource
-                  ? '0 0 20px rgba(255,215,0,0.7)'
-                  : hasScore ? '0 0 16px rgba(255,255,255,0.25)' : 'none',
-              }}>
-                {hasScore ? `${match.score_home} - ${match.score_away}` : 'VS'}
-              </span>
-
-              <span style={{
-                fontSize: 10, fontWeight: 700, color: '#00FF87',
-                background: 'rgba(0,255,135,0.08)',
-                border: '1px solid rgba(0,255,135,0.2)',
-                borderRadius: 6, padding: '2px 8px', letterSpacing: 0.5,
-              }}>
-                LIVE
-              </span>
-
-              {/* Kickoff time (local) */}
-              {match.scheduled_at && (
-                <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', marginTop: 1 }}>
-                  {dateStr} {timeStr}
-                </span>
-              )}
-
-              {/* Multi source badge */}
-              {multiSource && (
-                <span style={{
-                  fontSize: 9, fontWeight: 700, letterSpacing: 0.5,
-                  color: '#FFD700', background: 'rgba(255,215,0,0.1)',
-                  border: '1px solid rgba(255,215,0,0.3)',
-                  borderRadius: 4, padding: '1px 5px',
-                }}>
-                  MULTI
-                </span>
-              )}
-            </>
-          ) : isFinished ? (
-            <>
-              <span style={{
-                fontSize: 24, fontWeight: 900, letterSpacing: 2, lineHeight: 1,
-                color: 'rgba(255,255,255,0.55)',
-              }}>
-                {hasScore ? `${match.score_home} - ${match.score_away}` : 'FT'}
-              </span>
-              {match.scheduled_at && (
-                <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)' }}>
-                  {dateStr} {timeStr}
-                </span>
-              )}
-            </>
-          ) : (
-            <>
-              {/* Local kickoff time — large */}
-              <span style={{
-                fontSize: soon ? 20 : 18, fontWeight: 800, letterSpacing: 1,
-                color: soon ? '#f59e0b' : 'rgba(255,255,255,0.6)',
-                lineHeight: 1,
-              }}>
-                {timeStr || 'TBD'}
-              </span>
-              <span style={{
-                fontSize: 10, fontWeight: 600,
-                color: soon ? 'rgba(245,158,11,0.7)' : 'rgba(255,255,255,0.3)',
-              }}>
-                {dateStr}
-              </span>
-              {soon && (
-                <span style={{
-                  fontSize: 9, fontWeight: 800, color: '#f59e0b',
-                  background: 'rgba(245,158,11,0.1)',
-                  border: '1px solid rgba(245,158,11,0.25)',
-                  borderRadius: 4, padding: '2px 6px', letterSpacing: 0.5,
-                }}>
-                  SOON
-                </span>
-              )}
-            </>
-          )}
-        </div>
-
-        {/* Away team */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
-          <TeamLogo src={proxyLogo(match.away_logo)} name={match.away_team} />
-          <span style={{
-            fontSize: 11, fontWeight: 700, textAlign: 'center',
-            color: 'rgba(255,255,255,0.9)',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            maxWidth: '100%',
-          }}>
-            {match.away_team || 'Away'}
-          </span>
-        </div>
-      </div>
-
-      {/* Footer */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 9, gap: 8,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-          {isLive ? (
-            <>
-              <span style={{
-                fontSize: 10, fontWeight: 700, padding: '3px 7px', borderRadius: 5,
-                background: 'rgba(96,165,250,0.12)', color: '#60a5fa',
-                border: '1px solid rgba(96,165,250,0.2)',
-              }}>SD</span>
-              <span style={{
-                fontSize: 10, fontWeight: 700, padding: '3px 7px', borderRadius: 5,
-                background: 'rgba(0,255,135,0.08)', color: '#00FF87',
-                border: '1px solid rgba(0,255,135,0.18)',
-              }}>HD</span>
-            </>
-          ) : isFinished ? (
-            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)', fontWeight: 600 }}>Full Time</span>
-          ) : (
-            <span style={{ fontSize: 11, color: soon ? '#f59e0b' : 'rgba(255,255,255,0.25)', fontWeight: 600 }}>
-              {soon ? '⏱ Starting soon' : `Kicks off ${timeStr}`}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+            <span style={{ fontSize: 12, flexShrink: 0 }}>{icon}</span>
+            <span style={{
+              fontSize: 10, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase',
+              color: '#4338ca',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+              {league || sourceTab?.name || 'Football'}
             </span>
-          )}
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {multiSource && (
+              <span style={{
+                fontSize: 8, fontWeight: 800, color: '#d97706',
+                background: '#fef3c7', border: '1px solid #fde68a',
+                borderRadius: 4, padding: '1px 5px', flexShrink: 0,
+              }}>MULTI</span>
+            )}
+          </div>
           <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: 4,
-            fontSize: 12, fontWeight: 700,
-            color: isLive ? '#00FF87' : soon ? '#f59e0b' : 'rgba(255,255,255,0.35)',
-            padding: '5px 12px', borderRadius: 20,
-            background: isLive ? 'rgba(0,255,135,0.1)' : soon ? 'rgba(245,158,11,0.08)' : 'rgba(255,255,255,0.04)',
-            border: `1px solid ${isLive ? 'rgba(0,255,135,0.2)' : soon ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.06)'}`,
+            fontSize: 10, fontWeight: 800, letterSpacing: 0.4,
+            color: statusColor, background: statusBg,
+            borderRadius: 20, padding: '3px 9px', flexShrink: 0,
           }}>
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-            {isLive ? 'Watch' : isFinished ? 'Replay' : soon ? 'Soon' : 'Upcoming'}
+            {statusLabel}
           </span>
         </div>
+
+        {/* Body: Teams + Score/Time */}
+        <div style={{
+          display: 'flex', alignItems: 'center',
+          padding: '16px 12px',
+          gap: 8,
+          background: '#ffffff',
+        }}>
+          {/* Home */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7 }}>
+            <div style={{
+              width: 48, height: 48, borderRadius: 12,
+              background: '#f1f0ff',
+              border: '1.5px solid rgba(99,102,241,0.12)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              overflow: 'hidden', flexShrink: 0,
+            }}>
+              <TeamLogo src={proxyLogo(match.home_logo)} name={match.home_team} size={34} />
+            </div>
+            <span style={{
+              fontSize: 11, fontWeight: 700, textAlign: 'center', color: '#1e1b4b',
+              lineHeight: 1.3, maxWidth: 84,
+              display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+            }}>
+              {match.home_team || 'Home'}
+            </span>
+          </div>
+
+          {/* Centre */}
+          <div style={{
+            flexShrink: 0, display: 'flex', flexDirection: 'column',
+            alignItems: 'center', gap: 5, minWidth: 80,
+          }}>
+            {isLive ? (
+              <>
+                <div style={{
+                  fontSize: 26, fontWeight: 900, letterSpacing: 2, color: '#1e1b4b', lineHeight: 1,
+                }}>
+                  {hasScore ? `${match.score_home}–${match.score_away}` : (
+                    <span style={{ fontSize: 18, color: '#6b7280' }}>VS</span>
+                  )}
+                </div>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 4,
+                  background: '#fee2e2', borderRadius: 20, padding: '2px 8px',
+                }}>
+                  <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#dc2626', flexShrink: 0 }} />
+                  <span style={{ fontSize: 9, fontWeight: 800, color: '#dc2626', letterSpacing: 0.5 }}>LIVE</span>
+                </div>
+                {match.scheduled_at && (
+                  <span style={{ fontSize: 9, color: '#9ca3af' }}>{dateStr}</span>
+                )}
+              </>
+            ) : isFinished ? (
+              <>
+                <div style={{ fontSize: 24, fontWeight: 900, letterSpacing: 2, color: '#6b7280' }}>
+                  {hasScore ? `${match.score_home}–${match.score_away}` : 'FT'}
+                </div>
+                <span style={{ fontSize: 9, color: '#9ca3af', fontWeight: 700 }}>{dateStr}</span>
+              </>
+            ) : (
+              <>
+                <div style={{
+                  fontSize: 22, fontWeight: 900, color: timeColor,
+                  letterSpacing: 0.5, lineHeight: 1,
+                  textShadow: soon ? '0 0 12px rgba(245,158,11,0.3)' : 'none',
+                }}>
+                  {timeStr || 'TBD'}
+                </div>
+                <span style={{ fontSize: 9, fontWeight: 700, color: '#6b7280', letterSpacing: 0.3 }}>
+                  KICK-OFF
+                </span>
+                <span style={{ fontSize: 9, color: '#9ca3af' }}>{dateStr}</span>
+              </>
+            )}
+          </div>
+
+          {/* Away */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7 }}>
+            <div style={{
+              width: 48, height: 48, borderRadius: 12,
+              background: '#f1f0ff',
+              border: '1.5px solid rgba(99,102,241,0.12)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              overflow: 'hidden', flexShrink: 0,
+            }}>
+              <TeamLogo src={proxyLogo(match.away_logo)} name={match.away_team} size={34} />
+            </div>
+            <span style={{
+              fontSize: 11, fontWeight: 700, textAlign: 'center', color: '#1e1b4b',
+              lineHeight: 1.3, maxWidth: 84,
+              display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+            }}>
+              {match.away_team || 'Away'}
+            </span>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '8px 12px 10px',
+          background: '#f8f7ff',
+          borderTop: '1px solid rgba(99,102,241,0.08)',
+        }}>
+          <div style={{ display: 'flex', gap: 5 }}>
+            {isLive && (
+              <>
+                <span style={{ fontSize: 9, fontWeight: 800, padding: '2px 7px', borderRadius: 4, background: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd' }}>HD</span>
+                <span style={{ fontSize: 9, fontWeight: 800, padding: '2px 7px', borderRadius: 4, background: '#ede9fe', color: '#6d28d9', border: '1px solid #ddd6fe' }}>SD</span>
+              </>
+            )}
+            {!isLive && !isFinished && timeStr && (
+              <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>
+                {soon ? `⚡ ${timeStr}` : timeStr}
+              </span>
+            )}
+            {isFinished && <span style={{ fontSize: 10, color: '#9ca3af', fontWeight: 600 }}>Full Time</span>}
+          </div>
+          <button
+            className="mc-watch"
+            onClick={(e) => { e.stopPropagation(); router.push(`/watch/${match.id}${fromTab ? `?from=${fromTab}` : ''}`) }}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              fontSize: 10, fontWeight: 800, letterSpacing: 0.3,
+              color: '#4f46e5', background: '#ede9fe',
+              border: '1px solid #c4b5fd',
+              borderRadius: 20, padding: '4px 12px',
+              cursor: 'pointer', transition: 'all .18s',
+            }}
+          >
+            <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            {isFinished ? 'Replay' : 'Watch'}
+          </button>
+        </div>
       </div>
-    </div>
+    </>
   )
 }
 

@@ -3,8 +3,6 @@ import { useMemo, useState, useEffect, useCallback } from 'react'
 import useSWR from 'swr'
 import { fetcher, apiUrl, isSoon } from '@/lib/api'
 import MatchCard from './MatchCard'
-import SportSrcMatchCard from './SportSrcMatchCard'
-import MatchSkeleton from './MatchSkeleton'
 import { translateLeague, leagueFame, leagueIcon } from '@/lib/leagues'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -63,32 +61,34 @@ const StatusTabs = ({ active, onChange, liveCount, soonCount, upcomingCount }) =
             key={id}
             onClick={() => onChange(id)}
             style={{
-              background:   isActive ? c.bg   : 'rgba(255,255,255,0.05)',
-              border:       `1px solid ${isActive ? c.border : 'rgba(255,255,255,0.1)'}`,
-              borderRadius: 20,
+              background:   isActive ? c.bg   : 'rgba(255,255,255,0.07)',
+              border:       `1.5px solid ${isActive ? c.border : 'rgba(255,255,255,0.18)'}`,
+              borderRadius: 22,
               cursor: 'pointer',
-              padding: '6px 14px', fontSize: 13, fontWeight: 700,
+              padding: '7px 16px', fontSize: 13, fontWeight: 900,
               display: 'flex', alignItems: 'center', gap: 6,
               transition: 'all .15s',
+              letterSpacing: 0.3,
+              boxShadow: isActive ? `0 0 10px ${c.border}40` : 'none',
             }}
           >
-            {id === 'live' && isActive && (
+            {id === 'live' && (
               <span style={{
                 width: 7, height: 7, borderRadius: '50%',
-                background: c.dot, flexShrink: 0,
-                boxShadow: `0 0 6px ${c.dotGlow}`,
-                animation: 'pulse 1.4s ease-in-out infinite',
+                background: isActive ? c.dot : 'rgba(255,255,255,0.3)', flexShrink: 0,
+                boxShadow: isActive ? `0 0 6px ${c.dotGlow}` : 'none',
+                animation: isActive ? 'pulse 1.4s ease-in-out infinite' : 'none',
               }} />
             )}
-            <span style={{ color: isActive ? c.text : 'rgba(255,255,255,0.38)' }}>
+            <span style={{ color: isActive ? c.text : 'rgba(255,255,255,0.75)' }}>
               {label}
             </span>
             {count > 0 && (
               <span style={{
                 fontSize: 11, fontWeight: 800,
-                background: isActive ? c.badgeBg : 'rgba(255,255,255,0.07)',
-                color:      isActive ? c.badgeText : 'rgba(255,255,255,0.3)',
-                borderRadius: 10, padding: '1px 6px', lineHeight: 1.6,
+                background: isActive ? c.badgeBg : 'rgba(255,255,255,0.12)',
+                color:      isActive ? c.badgeText : 'rgba(255,255,255,0.6)',
+                borderRadius: 10, padding: '1px 7px', lineHeight: 1.6,
               }}>
                 {count}
               </span>
@@ -116,7 +116,7 @@ const SidebarItem = ({ label, icon, count, liveCount, isActive, onClick }) => (
     <span style={{ fontSize: 13, flexShrink: 0 }}>{icon}</span>
     <span style={{
       flex: 1, fontSize: 12, fontWeight: isActive ? 700 : 500,
-      color: isActive ? '#fff' : 'rgba(255,255,255,0.55)',
+      color: isActive ? '#fff' : 'rgba(255,255,255,0.82)',
       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
     }}>
       {label}
@@ -144,7 +144,8 @@ const SidebarItem = ({ label, icon, count, liveCount, isActive, onClick }) => (
 const LeagueSidebar = ({ leagues, active, onChange }) => (
   <div style={{
     width: 168, flexShrink: 0,
-    borderRight: '1px solid rgba(255,255,255,0.06)',
+    borderRight: '1px solid rgba(255,255,255,0.12)',
+    background: 'rgba(0,0,0,0.18)',
     padding: '12px 8px', overflowY: 'auto',
     maxHeight: 'calc(100vh - 120px)', position: 'sticky', top: 52,
   }}>
@@ -237,33 +238,47 @@ const LeagueSection = ({ league, matches, isMultiSource, fromTab }) => {
   const fame = leagueFame(league)
   const hot  = fame <= 8
   return (
-    <div style={{ marginBottom: 12 }}>
+    <div style={{ marginBottom: 20 }}>
+      {/* League header */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 6,
-        padding: '8px 0 6px',
-        borderBottom: `1px solid ${hot ? 'rgba(255,215,0,0.1)' : 'rgba(255,255,255,0.05)'}`,
-        marginBottom: 8,
+        display: 'flex', alignItems: 'center', gap: 7,
+        padding: '10px 16px 8px',
       }}>
-        <span style={{ fontSize: 13 }}>{icon}</span>
-        <span style={{ fontSize: 12, fontWeight: 800, color: hot ? '#FFD700' : 'rgba(255,255,255,0.55)', letterSpacing: 0.3 }}>
+        <span style={{
+          width: 3, height: 14, borderRadius: 2, flexShrink: 0,
+          background: hot ? 'linear-gradient(180deg,#fbbf24,#f97316)' : 'linear-gradient(180deg,#6366f1,#a855f7)',
+        }} />
+        <span style={{ fontSize: 14 }}>{icon}</span>
+        <span style={{ fontSize: 13, fontWeight: 800, color: '#fff', letterSpacing: 0.3 }}>
           {league || 'Football'}
         </span>
-        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', fontWeight: 600 }}>
+        <span style={{
+          fontSize: 11, fontWeight: 800,
+          color: '#fff',
+          background: hot ? 'rgba(251,191,36,0.35)' : 'rgba(99,102,241,0.45)',
+          border: hot ? '1px solid rgba(251,191,36,0.5)' : '1px solid rgba(99,102,241,0.6)',
+          borderRadius: 8, padding: '1px 7px',
+        }}>
           {matches.length}
         </span>
         {hot && (
           <span style={{
-            marginLeft: 'auto', fontSize: 9, fontWeight: 800, color: '#FFD700',
+            fontSize: 9, fontWeight: 800, color: '#FFD700',
             background: 'rgba(255,215,0,0.1)', border: '1px solid rgba(255,215,0,0.2)',
             borderRadius: 4, padding: '1px 5px',
           }}>🔥 HOT</span>
         )}
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {matches.map((m) => fromTab === 'sport-src'
-          ? <SportSrcMatchCard key={m.id} match={m} />
-          : <MatchCard key={m.id} match={m} multiSource={isMultiSource(m)} fromTab={fromTab} />
-        )}
+      {/* Grid — auto-fit stretches cards to fill the row */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+        gap: 10,
+        padding: '2px 16px 8px',
+      }}>
+        {matches.map((m) => (
+          <MatchCard key={m.id} match={m} multiSource={isMultiSource(m)} fromTab={fromTab} />
+        ))}
       </div>
     </div>
   )
@@ -300,7 +315,7 @@ export default function MatchList({ tab }) {
     return () => window.removeEventListener('resize', check)
   }, [])
 
-  const { data: matches, isLoading } = useSWR(
+  const { data: matches, isLoading, isValidating } = useSWR(
     apiUrl.matches(tab),
     fetcher,
     { refreshInterval: 60000, revalidateOnFocus: false, dedupingInterval: 30000 }
@@ -378,10 +393,40 @@ export default function MatchList({ tab }) {
 
   if (isLoading) {
     return (
-      <div>
-        <div style={{ height: 44, borderBottom: '1px solid rgba(255,255,255,0.07)' }} />
-        <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {[...Array(4)].map((_, i) => <MatchSkeleton key={i} />)}
+      <div style={{ maxWidth: 1440, margin: '0 auto' }}>
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          justifyContent: 'center', gap: 18, padding: '64px 16px',
+        }}>
+          {/* Triple-ring spinner */}
+          <div style={{ position: 'relative', width: 56, height: 56 }}>
+            <div style={{
+              position: 'absolute', inset: 0, borderRadius: '50%',
+              border: '3px solid transparent',
+              borderTopColor: '#6366f1',
+              animation: 'spin .9s linear infinite',
+            }} />
+            <div style={{
+              position: 'absolute', inset: 6, borderRadius: '50%',
+              border: '3px solid transparent',
+              borderTopColor: '#a855f7',
+              animation: 'spin .7s linear infinite reverse',
+            }} />
+            <div style={{
+              position: 'absolute', inset: 13, borderRadius: '50%',
+              border: '3px solid transparent',
+              borderTopColor: '#00e5ff',
+              animation: 'spin 1.1s linear infinite',
+            }} />
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            <p style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 800, color: 'rgba(255,255,255,0.85)' }}>
+              Loading matches…
+            </p>
+            <p style={{ margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>
+              Fetching live data
+            </p>
+          </div>
         </div>
       </div>
     )
@@ -397,7 +442,7 @@ export default function MatchList({ tab }) {
   }
 
   return (
-    <div style={{ paddingBottom: 80 }}>
+    <div style={{ paddingBottom: 80, maxWidth: 1440, margin: '0 auto' }}>
 
       {/* Status tabs — hidden for main-live */}
       {!isMainTab && (
@@ -428,11 +473,11 @@ export default function MatchList({ tab }) {
           {/* Search bar */}
           <div style={{
             padding: '10px 16px 6px',
-            position: 'sticky', top: 52, zIndex: 20, background: '#0A0E1A',
+            position: 'sticky', top: 52, zIndex: 20, background: 'var(--bg)',
           }}>
             <div style={{
               display: 'flex', alignItems: 'center', gap: 8,
-              background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+              background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)',
               borderRadius: 12, padding: '8px 14px',
             }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2.5" strokeLinecap="round">
@@ -443,10 +488,27 @@ export default function MatchList({ tab }) {
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setLeagueFilter(null) }}
                 placeholder="Search team or league…"
-                style={{ flex: 1, background: 'none', border: 'none', outline: 'none', color: '#fff', fontSize: 13 }}
+                style={{ flex: 1, background: 'none', border: 'none', outline: 'none', color: 'rgba(255,255,255,0.9)', fontSize: 13 }}
               />
               {search && (
                 <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.4)', fontSize: 18, lineHeight: 1, padding: 0 }}>×</button>
+              )}
+              {/* Re-fetch indicator — shows on every background API poll */}
+              {isValidating && !isLoading && !search && (
+                <div style={{ position: 'relative', width: 16, height: 16, flexShrink: 0 }}>
+                  <div style={{
+                    position: 'absolute', inset: 0, borderRadius: '50%',
+                    border: '2px solid transparent',
+                    borderTopColor: '#6366f1',
+                    animation: 'spin .8s linear infinite',
+                  }} />
+                  <div style={{
+                    position: 'absolute', inset: 3, borderRadius: '50%',
+                    border: '2px solid transparent',
+                    borderTopColor: '#a855f7',
+                    animation: 'spin .6s linear infinite reverse',
+                  }} />
+                </div>
               )}
               {/* Mobile filter button */}
               {isMobile && leagueOptions.length > 1 && !search && (
@@ -470,7 +532,7 @@ export default function MatchList({ tab }) {
           </div>
 
           {/* Match groups */}
-          <div style={{ padding: '4px 16px 0' }}>
+          <div style={{ paddingTop: 4 }}>
             {groups.length === 0 ? (
               <EmptyTab statusTab={statusTab} hasSearch={!!q || !!leagueFilter} search={search} />
             ) : (

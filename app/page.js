@@ -7,6 +7,7 @@ import Header from '@/components/Header'
 import TabStrip from '@/components/TabStrip'
 import MatchList from '@/components/MatchList'
 import AdBanner from '@/components/AdBanner'
+import Footer from '@/components/Footer'
 
 function HomeContent() {
   const { tabs, ui } = useConfig()
@@ -41,7 +42,7 @@ function HomeContent() {
   }, [router])
 
   return (
-    <div style={{ minHeight: '100vh', background: ui?.bgColor || '#0A0E1A' }}>
+    <div style={{ minHeight: '100vh' }}>
       <Header />
       <TabStrip tabs={tabs} activeTab={activeTab} onTabChange={handleTabChange} />
       {!isPremium && <AdBanner page="home" slot="home_top" style={{ padding: '8px 16px 0' }} />}
@@ -49,6 +50,7 @@ function HomeContent() {
         <MatchList key={activeTab} tab={activeTab} />
       </main>
       {!isPremium && <AdBanner page="home" slot="home_bottom" style={{ padding: '0 16px 8px' }} />}
+      <Footer />
     </div>
   )
 }

@@ -11,7 +11,6 @@ import VideoPlayer from '@/components/VideoPlayer'
 import ServerSelector from '@/components/ServerSelector'
 import TeamLogo from '@/components/TeamLogo'
 import AdBanner from '@/components/AdBanner'
-import SportSRCDetail from '@/components/SportSRCDetail'
 
 // ── Countdown gaming UI ────────────────────────────────────────────────────────
 const CYBER = '#00e5ff'
@@ -215,14 +214,6 @@ export default function WatchPage() {
   })()
   const { data: streams, isLoading: streamsLoading, mutate: mutateStreams } = useSWR(streamsUrl, fetcher, { refreshInterval: 120000, keepPreviousData: true, revalidateOnFocus: false })
 
-  // SportSRC match detail (stats, lineups, events) — only fetched when embed streams exist
-  const isSportsrc = streams?.embed?.length > 0
-  const { data: srcDetail, isLoading: srcDetailLoading } = useSWR(
-    isSportsrc ? apiUrl.sportsrcDetail(id) : null,
-    fetcher,
-    { refreshInterval: 120000, revalidateOnFocus: false }
-  )
-
   const allUrls = useMemo(() => [
     ...((streams?.HD      || []).map((s) => s.url)),
     ...((streams?.SD      || []).map((s) => s.url)),
@@ -230,7 +221,6 @@ export default function WatchPage() {
   ], [streams])
 
   const [activeUrl,      setActiveUrl]      = useState(null)
-  const [activeEmbed,    setActiveEmbed]    = useState(null)
   const [allExhausted,   setAllExhausted]   = useState(false)
   const [mainMode,       setMainMode]       = useState(null) // 'soco'|'sd'|'hd'|'hesgoal' for main-live
   const [retryCountdown, setRetryCountdown] = useState(null) // null | 1..10
@@ -273,13 +263,6 @@ export default function WatchPage() {
     else if (mainMode === 'china-sd') setActiveUrl(streams?.SD?.[0]?.url || null)
     else                              setActiveUrl(null) // soco iframe — no video URL
   }, [isMainPage, mainMode, streams])
-
-  // Auto-select first embed stream for sportsrc matches
-  useEffect(() => {
-    if (streams?.embed?.length > 0 && !activeEmbed) {
-      setActiveEmbed(streams.embed[0].url)
-    }
-  }, [streams?.embed]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // When streams load or refresh: if CDN token changed (same base path, different full URL)
   // → auto-switch to the fresh URL. This picks up re-warm tokens without user action.
@@ -372,23 +355,34 @@ export default function WatchPage() {
   }, [id])
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0A0E1A' }}>
+    <div style={{ minHeight: '100vh', background: '#ffffff' }}>
       {/* Back button + header */}
       <div style={{
         position: 'sticky', top: 0, zIndex: 100,
-        background: '#0D1220', borderBottom: '1px solid rgba(255,255,255,0.07)',
-        padding: '0 14px', height: 52,
+        background: 'linear-gradient(135deg, #17134a 0%, #1e1b4b 100%)',
+        borderBottom: '1px solid rgba(99,102,241,0.4)',
+        boxShadow: '0 2px 20px rgba(99,102,241,0.25)',
+        padding: '0 14px', height: 54,
         display: 'flex', alignItems: 'center', gap: 12,
       }}>
         <button
           onClick={() => { killActiveStream(); router.back() }}
-          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.7)', padding: 4, cursor: 'pointer' }}
+          style={{
+            background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)',
+            borderRadius: 8, color: '#fff', padding: '6px 8px', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', flexShrink: 0,
+          }}
         >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
             <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
           </svg>
         </button>
-        <span style={{ fontWeight: 700, fontSize: 15, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span style={{
+          fontWeight: 800, fontSize: 15, flex: 1,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          color: '#ffffff',
+          textShadow: '0 1px 8px rgba(0,0,0,0.4)',
+        }}>
           {match?.title || 'Watch'}
         </span>
         {match && <LiveBadge status={match.status} scheduledAt={match.scheduled_at} />}
@@ -399,8 +393,8 @@ export default function WatchPage() {
             rel="noopener noreferrer"
             style={{
               display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
-              background: 'rgba(0,136,204,0.15)',
-              border: '1px solid rgba(0,136,204,0.3)',
+              background: 'rgba(41,182,246,0.15)',
+              border: '1px solid rgba(41,182,246,0.35)',
               borderRadius: 20, padding: '5px 10px',
               color: '#29b6f6', textDecoration: 'none',
               fontSize: 12, fontWeight: 700,
@@ -414,10 +408,12 @@ export default function WatchPage() {
         )}
       </div>
 
-      <div style={{ maxWidth: 720, margin: '0 auto', padding: '0 0 80px' }}>
-        {/* Video Player / Pre-match Countdown */}
-        <div style={{ background: '#000' }}>
-          {match && match.status !== 'live' && !streams?.SD?.length && !streams?.HD?.length && !streams?.embed?.length
+      <div style={{ maxWidth: 720, margin: '0 auto', paddingBottom: 80 }}>
+        {/* spacing between sticky header and player */}
+        <div style={{ height: 12 }} />
+        {/* Video Player */}
+        <div style={{ background: '#000', borderRadius: 12, overflow: 'hidden' }}>
+          {match && match.status !== 'live' && !streams?.SD?.length && !streams?.HD?.length
             ? <CountdownPanel match={match} />
             : isMainPage && mainMode === 'soco' && match?.stream_page_url
             ? (
@@ -435,28 +431,6 @@ export default function WatchPage() {
             )
             : activeUrl
             ? <VideoPlayer key={playerKey} url={activeUrl} isLive={match?.status === 'live'} onError={handleError} allExhausted={allExhausted} retryCountdown={retryCountdown} onRefresh={handleRefresh} autoStart={autoRestart} />
-            : activeEmbed
-            ? (() => {
-                const isFullPage = activeEmbed.includes('sport99.live')
-                return (
-                  <div style={{
-                    position: 'relative', width: '100%', background: '#000',
-                    ...(isFullPage
-                      ? { height: 'clamp(540px, 85vh, 800px)' }
-                      : { aspectRatio: '16/9' }),
-                  }}>
-                    <iframe
-                      key={activeEmbed}
-                      src={activeEmbed}
-                      style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
-                      allowFullScreen
-                      allow="autoplay; encrypted-media; fullscreen"
-                      referrerPolicy="no-referrer"
-                      sandbox="allow-scripts allow-same-origin allow-presentation allow-popups allow-forms"
-                    />
-                  </div>
-                )
-              })()
             : streamsLoading
             ? (
               <div style={{ aspectRatio: '16/9', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, background: '#000' }}>
@@ -486,53 +460,93 @@ export default function WatchPage() {
           }
         </div>
 
-        {/* Match info — gaming style */}
+        {/* Match info */}
         {match && (
           <div style={{
-            position:'relative', overflow:'hidden',
-            background:'linear-gradient(135deg,rgba(0,229,255,0.04) 0%,rgba(6,8,15,0.9) 50%,rgba(124,58,237,0.04) 100%)',
-            borderBottom:'1px solid rgba(0,229,255,0.1)',
-            padding:'12px 16px',
+            background: '#f8f7ff',
+            borderBottom: '1px solid rgba(99,102,241,0.15)',
+            padding: '14px 16px',
           }}>
-            {/* Subtle top accent line */}
-            <div style={{ position:'absolute',top:0,left:0,right:0,height:1,background:'linear-gradient(90deg,transparent,rgba(0,229,255,0.4),transparent)' }}/>
-
-            <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-              {/* Home logo with cyber glow */}
-              <div style={{ flexShrink:0, filter:'drop-shadow(0 0 6px rgba(0,229,255,0.35))' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              <div style={{ flexShrink: 0 }}>
                 <TeamLogo src={match.home_logo} name={match.home_team} />
               </div>
 
-              <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ flex: 1, minWidth: 0, textAlign: 'center' }}>
                 <p style={{
-                  fontWeight:800, fontSize:14,
-                  overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
-                  background:'linear-gradient(90deg,#fff 60%,rgba(0,229,255,0.7))',
-                  WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text',
-                  margin:0,
+                  fontWeight: 800, fontSize: 15, color: '#1e1b4b',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  margin: '0 0 6px',
                 }}>
                   {match.title}
                 </p>
-                <p style={{ fontSize:11, color:'rgba(0,229,255,0.55)', marginTop:4, fontWeight:600, letterSpacing:.3, margin:'4px 0 0' }}>
-                  {match.status === 'live'
-                    ? <span style={{ color:'#4ade80', textShadow:'0 0 8px rgba(74,222,128,0.6)', fontWeight:700 }}>● Live</span>
-                    : match.scheduled_at
-                    ? `⏱ ${formatDate(match.scheduled_at)}`
-                    : ''}
-                </p>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                  {match.status === 'live' ? (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 5,
+                      background: '#dcfce7', border: '1px solid #86efac',
+                      borderRadius: 20, padding: '3px 10px',
+                      color: '#16a34a', fontSize: 12, fontWeight: 800,
+                    }}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#16a34a' }} />
+                      Live
+                    </span>
+                  ) : match.scheduled_at ? (
+                    <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 600 }}>
+                      ⏱ {formatDate(match.scheduled_at)}
+                    </span>
+                  ) : null}
+                  {match.league && (
+                    <span style={{
+                      fontSize: 11, color: '#4f46e5', fontWeight: 700,
+                      background: '#ede9fe', borderRadius: 6, padding: '2px 8px',
+                    }}>
+                      {match.league}
+                    </span>
+                  )}
+                </div>
               </div>
 
-              {/* Away logo with purple glow */}
-              <div style={{ flexShrink:0, filter:'drop-shadow(0 0 6px rgba(124,58,237,0.35))' }}>
+              <div style={{ flexShrink: 0 }}>
                 <TeamLogo src={match.away_logo} name={match.away_team} />
               </div>
             </div>
           </div>
         )}
 
+        {/* VPN tip — above stream selector */}
+        {match?.status === 'live' && (
+          <div style={{
+            margin: '14px 16px 0',
+            padding: '11px 14px',
+            borderRadius: 10,
+            background: 'linear-gradient(135deg, #fef3c7 0%, #fffbeb 100%)',
+            border: '1.5px solid #f59e0b',
+            display: 'flex', alignItems: 'center', gap: 11,
+            boxShadow: '0 2px 8px rgba(245,158,11,0.15)',
+          }}>
+            <span style={{ fontSize: 18, flexShrink: 0 }}>⚠️</span>
+            <div>
+              <p style={{ margin: '0 0 1px', fontSize: 12, fontWeight: 800, color: '#92400e' }}>
+                VPN လိုအပ်နိုင်သည်
+              </p>
+              <p style={{ margin: 0, fontSize: 11, color: '#b45309', lineHeight: 1.5 }}>
+                ကြည့်လို့မရရင် VPN အဖွင့်အပိတ် လုပ်ပြီးကြည့်ပေးပါ
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Stream selector — only shown for live matches */}
         {match?.status === 'live' && isMainPage ? (
-          <div style={{ padding: '14px 16px', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{
+            margin: '12px 16px 0',
+            padding: '14px',
+            background: '#f3f4f6',
+            borderRadius: 14,
+            border: '1px solid #e5e7eb',
+            display: 'flex', gap: 10, flexWrap: 'wrap',
+          }}>
             {/* English HD 1080p — HESGoal fixed Rumble 1080p */}
             {streams?.hesgoal?.find(s => s.label === 'English 1080') && (() => {
               const active = mainMode === 'eng-1080'
@@ -546,8 +560,8 @@ export default function WatchPage() {
                   transition: 'all .15s',
                 }}>
                   <span style={{ fontSize: 18 }}>🏴󠁧󠁢󠁥󠁮󠁧󠁿</span>
-                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#00e5ff' : 'rgba(255,255,255,0.5)' }}>English HD</span>
-                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>1080p</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#00e5ff' : '#374151' }}>English HD</span>
+                  <span style={{ fontSize: 10, color: active ? 'rgba(0,229,255,0.7)' : '#9ca3af' }}>1080p</span>
                 </button>
               )
             })()}
@@ -564,8 +578,8 @@ export default function WatchPage() {
                   transition: 'all .15s',
                 }}>
                   <span style={{ fontSize: 18 }}>🏴󠁧󠁢󠁥󠁮󠁧󠁿</span>
-                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#00e5ff' : 'rgba(255,255,255,0.5)' }}>English HD</span>
-                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>720p</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#00e5ff' : '#374151' }}>English HD</span>
+                  <span style={{ fontSize: 10, color: '#9ca3af' }}>720p</span>
                 </button>
               )
             })()}
@@ -582,8 +596,8 @@ export default function WatchPage() {
                   transition: 'all .15s',
                 }}>
                   <span style={{ fontSize: 18 }}>🇸🇦</span>
-                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#22c55e' : 'rgba(255,255,255,0.5)' }}>Arab HD</span>
-                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>720p</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#22c55e' : '#374151' }}>Arab HD</span>
+                  <span style={{ fontSize: 10, color: '#9ca3af' }}>720p</span>
                 </button>
               )
             })()}
@@ -600,8 +614,8 @@ export default function WatchPage() {
                   transition: 'all .15s',
                 }}>
                   <span style={{ fontSize: 18 }}>🎬</span>
-                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#e879f9' : 'rgba(255,255,255,0.5)' }}>China HD</span>
-                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>720p</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#e879f9' : '#374151' }}>China HD</span>
+                  <span style={{ fontSize: 10, color: '#9ca3af' }}>720p</span>
                 </button>
               )
             })()}
@@ -618,8 +632,8 @@ export default function WatchPage() {
                   transition: 'all .15s',
                 }}>
                   <span style={{ fontSize: 18 }}>📺</span>
-                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#a78bfa' : 'rgba(255,255,255,0.5)' }}>China SD</span>
-                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>480p</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#a78bfa' : '#374151' }}>China SD</span>
+                  <span style={{ fontSize: 10, color: '#9ca3af' }}>480p</span>
                 </button>
               )
             })()}
@@ -636,19 +650,25 @@ export default function WatchPage() {
                   transition: 'all .15s',
                 }}>
                   <span style={{ fontSize: 18 }}>🔴</span>
-                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#ff6b6b' : 'rgba(255,255,255,0.5)' }}>SOCO</span>
-                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>Live</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#ff6b6b' : '#374151' }}>SOCO</span>
+                  <span style={{ fontSize: 10, color: '#9ca3af' }}>Live</span>
                 </button>
               )
             })()}
           </div>
         ) : match?.status === 'live' ? (
-          <div style={{ padding: 16 }}>
+          <div style={{
+            margin: '12px 16px 0',
+            padding: '16px',
+            background: '#f3f4f6',
+            borderRadius: 14,
+            border: '1px solid #e5e7eb',
+          }}>
             {streams?.hesgoal?.length > 0 ? (
               <>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                  <span style={{ fontSize: 11, fontWeight: 800, color: 'rgba(255,255,255,0.4)', letterSpacing: 1, textTransform: 'uppercase' }}>Select Channel</span>
-                  <button onClick={handleRefresh} disabled={isRefreshing} style={{ background: 'rgba(0,229,255,0.08)', border: '1px solid rgba(0,229,255,0.2)', borderRadius: 8, padding: '4px 10px', color: '#00e5ff', fontSize: 11, fontWeight: 700, cursor: 'pointer', opacity: isRefreshing ? 0.5 : 1 }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: '#4f46e5', letterSpacing: 1, textTransform: 'uppercase' }}>Select Channel</span>
+                  <button onClick={handleRefresh} disabled={isRefreshing} style={{ background: '#ede9fe', border: '1px solid #c4b5fd', borderRadius: 8, padding: '4px 10px', color: '#4f46e5', fontSize: 11, fontWeight: 700, cursor: 'pointer', opacity: isRefreshing ? 0.5 : 1 }}>
                     {isRefreshing ? 'Loading…' : '↻ Refresh'}
                   </button>
                 </div>
@@ -658,11 +678,11 @@ export default function WatchPage() {
                     return (
                       <button key={s.id} onClick={() => { killActiveStream(); setActiveUrl(s.url) }} style={{
                         padding: '14px 10px', borderRadius: 10, cursor: 'pointer',
-                        border: `1.5px solid ${active ? '#00e5ff' : 'rgba(255,255,255,0.1)'}`,
-                        background: active ? 'rgba(0,229,255,0.15)' : 'rgba(255,255,255,0.04)',
-                        color: active ? '#00e5ff' : 'rgba(255,255,255,0.75)',
+                        border: `1.5px solid ${active ? '#4f46e5' : 'rgba(99,102,241,0.2)'}`,
+                        background: active ? '#ede9fe' : '#f8f7ff',
+                        color: active ? '#4f46e5' : '#374151',
                         fontSize: 13, fontWeight: 700, textAlign: 'center',
-                        boxShadow: active ? '0 0 14px rgba(0,229,255,0.25)' : 'none',
+                        boxShadow: active ? '0 4px 14px rgba(99,102,241,0.2)' : 'none',
                         transition: 'all .15s',
                       }}>
                         {s.label || `Server ${i + 1}`}
@@ -683,64 +703,61 @@ export default function WatchPage() {
           </div>
         ) : null}
 
-        {/* Embed server selector — SportSRC matches */}
-        {streams?.embed?.length > 0 && (
-          <div style={{ padding: '12px 16px' }}>
-            <p style={{ fontSize: 10, fontWeight: 800, color: 'rgba(255,255,255,0.3)', letterSpacing: 1, textTransform: 'uppercase', margin: '0 0 8px' }}>
-              SERVERS
-            </p>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {streams.embed.map((s, i) => {
-                const active = activeEmbed === s.url
-                const rawName = s.source_name && s.source_name !== 'sportsrc' ? s.source_name : ''
-                const label = rawName || `Server ${i + 1}`
-                const icon = label.toLowerCase().includes('fox') ? '🦊'
-                           : label.toLowerCase().includes('ppv') ? '⭐'
-                           : label.toLowerCase().includes('golf') ? '⛳'
-                           : label.toLowerCase().includes('hd') ? '📡'
-                           : '📺'
-                return (
-                  <button key={s.id || i} onClick={() => setActiveEmbed(s.url)} style={{
-                    flex: 1, minWidth: 80, padding: '10px 8px', borderRadius: 12, cursor: 'pointer',
-                    border: `1.5px solid ${active ? '#00e5ff' : 'rgba(0,229,255,0.2)'}`,
-                    background: active ? 'rgba(0,229,255,0.12)' : 'rgba(0,229,255,0.04)',
-                    boxShadow: active ? '0 0 14px rgba(0,229,255,0.25)' : 'none',
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                    transition: 'all .15s',
-                  }}>
-                    <span style={{ fontSize: 16 }}>{icon}</span>
-                    <span style={{ fontSize: 11, fontWeight: 800, color: active ? '#00e5ff' : 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: .5 }}>
-                      {label}
-                    </span>
-                    <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)' }}>Server {i + 1}</span>
-                  </button>
-                )
-              })}
+        {!isPremium && <AdBanner page="watch" slot="watch_below_player" style={{ padding: '12px 16px 0' }} />}
+
+        {/* Telegram join card */}
+        {ui?.telegramUrl && (
+          <div style={{
+            margin: '16px 16px 0',
+            padding: '16px',
+            borderRadius: 14,
+            background: 'linear-gradient(135deg, #e0f2fe 0%, #dbeafe 100%)',
+            border: '1.5px solid #93c5fd',
+            display: 'flex', alignItems: 'center', gap: 14,
+          }}>
+            {/* Telegram icon */}
+            <div style={{
+              width: 48, height: 48, borderRadius: 12, flexShrink: 0,
+              background: 'linear-gradient(135deg, #0088cc, #0099dd)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 4px 14px rgba(0,136,204,0.3)',
+            }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
+                <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+              </svg>
             </div>
+
+            {/* Text */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ margin: '0 0 3px', fontSize: 14, fontWeight: 800, color: '#1e3a5f' }}>
+                Join our Telegram
+              </p>
+              <p style={{ margin: 0, fontSize: 12, color: '#3b6ea8', lineHeight: 1.4 }}>
+                Get stream updates &amp; latest match links
+              </p>
+            </div>
+
+            {/* Button */}
+            <a
+              href={ui.telegramUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                flexShrink: 0,
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                background: 'linear-gradient(135deg, #0088cc, #006bb3)',
+                border: 'none', borderRadius: 22,
+                padding: '9px 18px',
+                color: '#fff', fontSize: 13, fontWeight: 800,
+                textDecoration: 'none',
+                boxShadow: '0 4px 14px rgba(0,136,204,0.35)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Join →
+            </a>
           </div>
         )}
-
-        {/* SportSRC match detail — Stats / Lineups / Events */}
-        {isSportsrc && (
-          <SportSRCDetail data={srcDetail} match={match} loading={srcDetailLoading} />
-        )}
-
-        {/* VPN tip */}
-        <div style={{
-          margin: '12px 16px 0',
-          padding: '10px 14px',
-          borderRadius: 10,
-          background: 'rgba(255,193,7,0.07)',
-          border: '1px solid rgba(255,193,7,0.2)',
-          display: 'flex', alignItems: 'center', gap: 10,
-        }}>
-          <span style={{ fontSize: 16, flexShrink: 0 }}>💡</span>
-          <span style={{ fontSize: 12, color: 'rgba(255,220,100,0.85)', lineHeight: 1.6 }}>
-            ကြည့်လို့မရရင် VPN အဖွင့်အပိတ် လုပ်ပြီးကြည့်ပေးပါ
-          </span>
-        </div>
-
-        {!isPremium && <AdBanner page="watch" slot="watch_below_player" style={{ padding: '12px 16px 0' }} />}
       </div>
     </div>
   )
