@@ -206,7 +206,13 @@ export default function WatchPage() {
   const isPremium   = auth?.is_premium === true
   const { data: match }                      = useSWR(apiUrl.match(id),   fetcher, { refreshInterval: 60000, revalidateOnFocus: false })
   const token = getToken()
-  const streamsUrl = token ? `${apiUrl.streams(id)}?token=${token}` : apiUrl.streams(id)
+  const streamsUrl = (() => {
+    const params = new URLSearchParams()
+    if (token) params.set('token', token)
+    if (isMainPage) params.set('includeHesgoal', 'true')
+    const qs = params.toString()
+    return qs ? `${apiUrl.streams(id)}?${qs}` : apiUrl.streams(id)
+  })()
   const { data: streams, isLoading: streamsLoading, mutate: mutateStreams } = useSWR(streamsUrl, fetcher, { refreshInterval: 120000, keepPreviousData: true, revalidateOnFocus: false })
 
   // SportSRC match detail (stats, lineups, events) — only fetched when embed streams exist
@@ -243,24 +249,25 @@ export default function WatchPage() {
   useEffect(() => {
     if (!isMainPage) return
     if (mainMode === null && (match || streams)) {
-      if (match?.stream_page_url) setMainMode('soco')
-      else if (streams?.hesgoal?.length) setMainMode('hesgoal')
-      else if (streams?.SD?.length) setMainMode('sd')
-      else if (streams?.HD?.length) setMainMode('hd')
+      const engHd = streams?.hesgoal?.find(s => s.label === 'Mobile 1')
+      const arHd  = streams?.hesgoal?.find(s => s.label === 'Mobile 2')
+      if (engHd)                       setMainMode('eng-hd')
+      else if (arHd)                   setMainMode('ar-hd')
+      else if (streams?.HD?.length)    setMainMode('china-hd')
+      else if (streams?.SD?.length)    setMainMode('china-sd')
+      else if (match?.stream_page_url) setMainMode('soco')
     }
   }, [isMainPage, match, streams, mainMode])
 
   useEffect(() => {
     if (!isMainPage) return
-    if (mainMode === 'sd')           setActiveUrl(streams?.SD?.[0]?.url || null)
-    else if (mainMode === 'hd')      setActiveUrl(streams?.HD?.[0]?.url || null)
-    else if (mainMode === 'hesgoal') {
-      // Don't override a channel the user manually picked
-      if (!streams?.hesgoal?.some(s => s.url === activeUrl)) {
-        setActiveUrl(streams?.hesgoal?.[0]?.url || null)
-      }
-    }
-    else                             setActiveUrl(null) // soco iframe — no video URL
+    const engHd = streams?.hesgoal?.find(s => s.label === 'Mobile 1')
+    const arHd  = streams?.hesgoal?.find(s => s.label === 'Mobile 2')
+    if (mainMode === 'eng-hd')        setActiveUrl(engHd?.url || null)
+    else if (mainMode === 'ar-hd')    setActiveUrl(arHd?.url || null)
+    else if (mainMode === 'china-hd') setActiveUrl(streams?.HD?.[0]?.url || null)
+    else if (mainMode === 'china-sd') setActiveUrl(streams?.SD?.[0]?.url || null)
+    else                              setActiveUrl(null) // soco iframe — no video URL
   }, [isMainPage, mainMode, streams])
 
   // Auto-select first embed stream for sportsrc matches
@@ -306,7 +313,7 @@ export default function WatchPage() {
     mutateStreamsRef.current()
       .then((data) => {
         // Only reset exhausted if we actually got new streams back
-        const hasStreams = data?.SD?.length || data?.HD?.length || data?.embed?.length
+        const hasStreams = data?.SD?.length || data?.HD?.length || data?.embed?.length || data?.hesgoal?.length
         if (hasStreams) {
           setAllExhausted(false)
           initializedRef.current = false
@@ -521,9 +528,80 @@ export default function WatchPage() {
 
         {/* Stream selector — only shown for live matches */}
         {match?.status === 'live' && isMainPage ? (
-          <>
-          <div style={{ padding: '14px 16px', display: 'flex', gap: 10 }}>
-            {/* SOCO button */}
+          <div style={{ padding: '14px 16px', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {/* English HD — HESGoal Mobile 1 */}
+            {streams?.hesgoal?.find(s => s.label === 'Mobile 1') && (() => {
+              const active = mainMode === 'eng-hd'
+              return (
+                <button onClick={() => { killActiveStream(); setMainMode('eng-hd') }} style={{
+                  flex: 1, padding: '12px 8px', borderRadius: 12, cursor: 'pointer',
+                  border: `1.5px solid ${active ? '#00e5ff' : 'rgba(0,229,255,0.3)'}`,
+                  background: active ? 'rgba(0,229,255,0.18)' : 'rgba(0,229,255,0.07)',
+                  boxShadow: active ? '0 0 18px rgba(0,229,255,0.3)' : 'none',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                  transition: 'all .15s',
+                }}>
+                  <span style={{ fontSize: 18 }}>🏴󠁧󠁢󠁥󠁮󠁧󠁿</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#00e5ff' : 'rgba(255,255,255,0.5)' }}>English</span>
+                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>HD</span>
+                </button>
+              )
+            })()}
+            {/* Arab HD — HESGoal Mobile 2 */}
+            {streams?.hesgoal?.find(s => s.label === 'Mobile 2') && (() => {
+              const active = mainMode === 'ar-hd'
+              return (
+                <button onClick={() => { killActiveStream(); setMainMode('ar-hd') }} style={{
+                  flex: 1, padding: '12px 8px', borderRadius: 12, cursor: 'pointer',
+                  border: `1.5px solid ${active ? '#22c55e' : 'rgba(34,197,94,0.3)'}`,
+                  background: active ? 'rgba(34,197,94,0.18)' : 'rgba(34,197,94,0.07)',
+                  boxShadow: active ? '0 0 18px rgba(34,197,94,0.3)' : 'none',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                  transition: 'all .15s',
+                }}>
+                  <span style={{ fontSize: 18 }}>🇸🇦</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#22c55e' : 'rgba(255,255,255,0.5)' }}>Arab</span>
+                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>HD</span>
+                </button>
+              )
+            })()}
+            {/* China HD */}
+            {streams?.HD?.length > 0 && (() => {
+              const active = mainMode === 'china-hd'
+              return (
+                <button onClick={() => { killActiveStream(); setMainMode('china-hd') }} style={{
+                  flex: 1, padding: '12px 8px', borderRadius: 12, cursor: 'pointer',
+                  border: `1.5px solid ${active ? '#e879f9' : 'rgba(232,121,249,0.3)'}`,
+                  background: active ? 'rgba(232,121,249,0.18)' : 'rgba(232,121,249,0.07)',
+                  boxShadow: active ? '0 0 18px rgba(232,121,249,0.3)' : 'none',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                  transition: 'all .15s',
+                }}>
+                  <span style={{ fontSize: 18 }}>🎬</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#e879f9' : 'rgba(255,255,255,0.5)' }}>China</span>
+                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>HD</span>
+                </button>
+              )
+            })()}
+            {/* China SD */}
+            {streams?.SD?.length > 0 && (() => {
+              const active = mainMode === 'china-sd'
+              return (
+                <button onClick={() => { killActiveStream(); setMainMode('china-sd') }} style={{
+                  flex: 1, padding: '12px 8px', borderRadius: 12, cursor: 'pointer',
+                  border: `1.5px solid ${active ? '#a78bfa' : 'rgba(167,139,250,0.3)'}`,
+                  background: active ? 'rgba(167,139,250,0.18)' : 'rgba(167,139,250,0.07)',
+                  boxShadow: active ? '0 0 18px rgba(167,139,250,0.3)' : 'none',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                  transition: 'all .15s',
+                }}>
+                  <span style={{ fontSize: 18 }}>📺</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#a78bfa' : 'rgba(255,255,255,0.5)' }}>China</span>
+                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>SD</span>
+                </button>
+              )
+            })()}
+            {/* SOCO — fallback */}
             {match?.stream_page_url && (() => {
               const active = mainMode === 'soco'
               return (
@@ -541,82 +619,7 @@ export default function WatchPage() {
                 </button>
               )
             })()}
-            {/* SD button */}
-            {streams?.SD?.length > 0 && (() => {
-              const active = mainMode === 'sd'
-              return (
-                <button onClick={() => { killActiveStream(); setMainMode('sd') }} style={{
-                  flex: 1, padding: '12px 8px', borderRadius: 12, cursor: 'pointer',
-                  border: `1.5px solid ${active ? '#a78bfa' : 'rgba(167,139,250,0.3)'}`,
-                  background: active ? 'rgba(167,139,250,0.18)' : 'rgba(167,139,250,0.07)',
-                  boxShadow: active ? '0 0 18px rgba(167,139,250,0.3)' : 'none',
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                  transition: 'all .15s',
-                }}>
-                  <span style={{ fontSize: 18 }}>📺</span>
-                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#a78bfa' : 'rgba(255,255,255,0.5)' }}>SD</span>
-                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>China</span>
-                </button>
-              )
-            })()}
-            {/* HD button */}
-            {streams?.HD?.length > 0 && (() => {
-              const active = mainMode === 'hd'
-              return (
-                <button onClick={() => { killActiveStream(); setMainMode('hd') }} style={{
-                  flex: 1, padding: '12px 8px', borderRadius: 12, cursor: 'pointer',
-                  border: `1.5px solid ${active ? '#e879f9' : 'rgba(232,121,249,0.3)'}`,
-                  background: active ? 'rgba(232,121,249,0.18)' : 'rgba(232,121,249,0.07)',
-                  boxShadow: active ? '0 0 18px rgba(232,121,249,0.3)' : 'none',
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                  transition: 'all .15s',
-                }}>
-                  <span style={{ fontSize: 18 }}>🎬</span>
-                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#e879f9' : 'rgba(255,255,255,0.5)' }}>HD</span>
-                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>China</span>
-                </button>
-              )
-            })()}
-            {/* HES-GOAL button */}
-            {streams?.hesgoal?.length > 0 && (() => {
-              const active = mainMode === 'hesgoal'
-              return (
-                <button onClick={() => { killActiveStream(); setMainMode('hesgoal') }} style={{
-                  flex: 1, padding: '12px 8px', borderRadius: 12, cursor: 'pointer',
-                  border: `1.5px solid ${active ? '#00e5ff' : 'rgba(0,229,255,0.3)'}`,
-                  background: active ? 'rgba(0,229,255,0.18)' : 'rgba(0,229,255,0.07)',
-                  boxShadow: active ? '0 0 18px rgba(0,229,255,0.3)' : 'none',
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                  transition: 'all .15s',
-                }}>
-                  <span style={{ fontSize: 18 }}>⚽</span>
-                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#00e5ff' : 'rgba(255,255,255,0.5)' }}>HES</span>
-                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>Goal</span>
-                </button>
-              )
-            })()}
           </div>
-          {/* Per-channel buttons shown when HES Goal is active */}
-          {mainMode === 'hesgoal' && streams?.hesgoal?.length > 0 && (
-            <div style={{ padding: '0 16px 14px', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {streams.hesgoal.map((s, i) => {
-                const active = activeUrl === s.url
-                return (
-                  <button key={s.id} onClick={() => { killActiveStream(); setMainMode('hesgoal'); setActiveUrl(s.url) }} style={{
-                    padding: '8px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 700,
-                    border: `1.5px solid ${active ? '#00e5ff' : 'rgba(0,229,255,0.25)'}`,
-                    background: active ? 'rgba(0,229,255,0.18)' : 'rgba(0,229,255,0.06)',
-                    color: active ? '#00e5ff' : 'rgba(255,255,255,0.55)',
-                    boxShadow: active ? '0 0 12px rgba(0,229,255,0.25)' : 'none',
-                    transition: 'all .15s',
-                  }}>
-                    {s.label || `Server ${i + 1}`}
-                  </button>
-                )
-              })}
-            </div>
-          )}
-          </>
         ) : match?.status === 'live' ? (
           <div style={{ padding: 16 }}>
             {streams?.hesgoal?.length > 0 ? (
