@@ -139,10 +139,14 @@ function MatchCard({ match, multiSource = false, fromTab = '' }) {
             {isLive ? (
               <>
                 <div style={{
-                  fontSize: 26, fontWeight: 900, letterSpacing: 2, color: '#1e1b4b', lineHeight: 1,
+                  fontSize: 22, fontWeight: 900, color: '#dc2626',
+                  letterSpacing: 0.5, lineHeight: 1,
                 }}>
+                  {timeStr || 'LIVE'}
+                </div>
+                <div style={{ fontSize: 20, fontWeight: 900, letterSpacing: 2, color: '#1e1b4b', lineHeight: 1 }}>
                   {hasScore ? `${match.score_home}–${match.score_away}` : (
-                    <span style={{ fontSize: 18, color: '#6b7280' }}>VS</span>
+                    <span style={{ fontSize: 16, color: '#6b7280' }}>VS</span>
                   )}
                 </div>
                 <div style={{
@@ -152,9 +156,6 @@ function MatchCard({ match, multiSource = false, fromTab = '' }) {
                   <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#dc2626', flexShrink: 0 }} />
                   <span style={{ fontSize: 9, fontWeight: 800, color: '#dc2626', letterSpacing: 0.5 }}>LIVE</span>
                 </div>
-                {match.scheduled_at && (
-                  <span style={{ fontSize: 9, color: '#9ca3af' }}>{dateStr}</span>
-                )}
               </>
             ) : isFinished ? (
               <>

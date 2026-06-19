@@ -157,23 +157,30 @@ function CountdownPanel({ match }) {
         </div>
       </div>
 
-      {/* Digit countdown */}
-      {secs != null && (
+      {/* Digit countdown — live ticking when scheduled_at known */}
+      {secs != null && secs > 0 ? (
         <div style={{ display:'flex', alignItems:'center', gap:'clamp(4px,1.5vw,8px)', marginBottom:12, animation:'cdIn .3s ease .12s both', position:'relative' }}>
           {h > 0 && <><CdDigit value={pad(h)} mmLabel="နာရီ" /><CdColon /></>}
           <CdDigit value={pad(m)} mmLabel="မိနစ်" />
           <CdColon />
           <CdDigit value={pad(s)} mmLabel="စက္ကန့်" />
         </div>
+      ) : (
+        /* No scheduled time — pulsing placeholder */
+        <div style={{ display:'flex', alignItems:'center', gap:'clamp(4px,1.5vw,8px)', marginBottom:12, animation:'cdIn .3s ease .12s both', position:'relative', opacity:.5 }}>
+          <CdDigit value="--" mmLabel="နာရီ" />
+          <CdColon />
+          <CdDigit value="--" mmLabel="မိနစ်" />
+          <CdColon />
+          <CdDigit value="--" mmLabel="စက္ကန့်" />
+        </div>
       )}
 
-      {/* Kickoff time */}
-      {kickoffLabel && (
-        <p style={{ fontSize:12, fontWeight:700, color:`rgba(0,229,255,0.55)`, margin:'0 0 6px', letterSpacing:.5,
-          animation:'cdIn .3s ease .18s both', position:'relative' }}>
-          ⏱ {kickoffLabel} <span style={{ fontSize:10, opacity:.6 }}>MMT</span>
-        </p>
-      )}
+      {/* Kickoff time label */}
+      <p style={{ fontSize:12, fontWeight:700, color:`rgba(0,229,255,0.55)`, margin:'0 0 6px', letterSpacing:.5,
+        animation:'cdIn .3s ease .18s both', position:'relative' }}>
+        {kickoffLabel ? `⏱ ${kickoffLabel} MMT` : '⏱ ပွဲချိန် မသတ်မှတ်ရသေး'}
+      </p>
 
       {/* Myanmar subtitle — shimmer */}
       <p style={{ margin:0, position:'relative', animation:'cdIn .3s ease .22s both' }}>
@@ -413,7 +420,7 @@ export default function WatchPage() {
         <div style={{ height: 12 }} />
         {/* Video Player */}
         <div style={{ background: '#000', borderRadius: 12, overflow: 'hidden' }}>
-          {match && match.status !== 'live' && !streams?.SD?.length && !streams?.HD?.length
+          {match && match.status !== 'live' && !streams?.SD?.length && !streams?.HD?.length && (!match.scheduled_at || new Date(match.scheduled_at) > Date.now())
             ? <CountdownPanel match={match} />
             : isMainPage && mainMode === 'soco' && match?.stream_page_url
             ? (
