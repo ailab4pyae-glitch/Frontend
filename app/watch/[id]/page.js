@@ -203,7 +203,9 @@ export default function WatchPage() {
   const { id }       = useParams()
   const router       = useRouter()
   const searchParams = useSearchParams()
-  const isMainPage   = searchParams.get('from') === 'main-live'
+  const fromTab      = searchParams.get('from')
+  const isHesgoal    = fromTab === 'hesgoal-live' || fromTab === 'main-live'
+  const isChinaLive  = fromTab === 'china-live'
   // Stop stream whenever this page is left — no ref needed, hits the global singleton
   useEffect(() => () => killActiveStream(), [])
 
@@ -215,7 +217,7 @@ export default function WatchPage() {
   const streamsUrl = (() => {
     const params = new URLSearchParams()
     if (token) params.set('token', token)
-    if (isMainPage) params.set('includeHesgoal', 'true')
+    if (isHesgoal) params.set('includeHesgoal', 'true')
     const qs = params.toString()
     return qs ? `${apiUrl.streams(id)}?${qs}` : apiUrl.streams(id)
   })()
@@ -244,7 +246,7 @@ export default function WatchPage() {
 
   // main-live: init mode once match+streams load; update activeUrl when mode changes
   useEffect(() => {
-    if (!isMainPage) return
+    if (!isHesgoal) return
     if (mainMode === null && (match || streams)) {
       const eng720  = streams?.hesgoal?.find(s => s.label === 'English 720')
       const eng1080 = streams?.hesgoal?.find(s => s.label === 'English 1080')
@@ -256,10 +258,10 @@ export default function WatchPage() {
       else if (streams?.SD?.length)    setMainMode('china-sd')
       else if (match?.stream_page_url) setMainMode('soco')
     }
-  }, [isMainPage, match, streams, mainMode])
+  }, [isHesgoal, match, streams, mainMode])
 
   useEffect(() => {
-    if (!isMainPage) return
+    if (!isHesgoal) return
     const eng1080 = streams?.hesgoal?.find(s => s.label === 'English 1080')
     const eng720  = streams?.hesgoal?.find(s => s.label === 'English 720')
     const arHd    = streams?.hesgoal?.find(s => s.label?.startsWith('Mobile'))
@@ -269,12 +271,12 @@ export default function WatchPage() {
     else if (mainMode === 'china-hd') setActiveUrl(streams?.HD?.[0]?.url || null)
     else if (mainMode === 'china-sd') setActiveUrl(streams?.SD?.[0]?.url || null)
     else                              setActiveUrl(null) // soco iframe — no video URL
-  }, [isMainPage, mainMode, streams])
+  }, [isHesgoal, mainMode, streams])
 
   // When streams load or refresh: if CDN token changed (same base path, different full URL)
   // → auto-switch to the fresh URL. This picks up re-warm tokens without user action.
   useEffect(() => {
-    if (isMainPage || !allUrls.length) return
+    if (isHesgoal || !allUrls.length) return
     setAllExhausted(false)
     if (!initializedRef.current) {
       initializedRef.current = true
@@ -295,7 +297,7 @@ export default function WatchPage() {
         return allUrls[0]
       })
     }
-  }, [allUrls, id, isMainPage])
+  }, [allUrls, id, isHesgoal])
 
   const mutateStreamsRef = useRef(mutateStreams)
   useEffect(() => { mutateStreamsRef.current = mutateStreams }, [mutateStreams])
@@ -422,7 +424,7 @@ export default function WatchPage() {
         <div style={{ background: '#000', borderRadius: 12, overflow: 'hidden' }}>
           {match && match.status !== 'live' && !streams?.SD?.length && !streams?.HD?.length && (!match.scheduled_at || new Date(match.scheduled_at) > Date.now())
             ? <CountdownPanel match={match} />
-            : isMainPage && mainMode === 'soco' && match?.stream_page_url
+            : isHesgoal && mainMode === 'soco' && match?.stream_page_url
             ? (
               <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', background: '#000' }}>
                 <iframe
@@ -545,7 +547,7 @@ export default function WatchPage() {
         )}
 
         {/* Stream selector — only shown for live matches */}
-        {match?.status === 'live' && isMainPage ? (
+        {match?.status === 'live' && isHesgoal ? (
           <div style={{
             margin: '12px 16px 0',
             padding: '14px',
@@ -671,7 +673,7 @@ export default function WatchPage() {
             borderRadius: 14,
             border: '1px solid #e5e7eb',
           }}>
-            {streams?.hesgoal?.length > 0 ? (
+            {streams?.hesgoal?.length > 0 && !isChinaLive ? (
               <>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                   <span style={{ fontSize: 11, fontWeight: 800, color: '#4f46e5', letterSpacing: 1, textTransform: 'uppercase' }}>Select Channel</span>

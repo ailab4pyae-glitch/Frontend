@@ -16,7 +16,7 @@ function HomeContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  const defaultTab = ui?.defaultTab || tabs[0]?.slug || 'main-live'
+  const defaultTab = tabs.find(t => t.slug === 'hesgoal-live')?.slug || ui?.defaultTab || tabs[0]?.slug || 'hesgoal-live'
   const activeTab = searchParams.get('tab') || defaultTab
 
   // Handle ?activate=TOKEN in URL — save token then clean URL
