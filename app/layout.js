@@ -1,5 +1,6 @@
 import './globals.css'
 import Script from 'next/script'
+import TelegramInit from '@/components/TelegramInit'
 
 const SITE_NAME = process.env.NEXT_PUBLIC_SITE_NAME || 'Ballone Live'
 const SITE_DESC = process.env.NEXT_PUBLIC_SITE_DESC || 'Watch live football matches free online. Stream Premier League, Champions League, La Liga, Serie A and more on Ballone Live.'
@@ -73,8 +74,11 @@ export default function RootLayout({ children }) {
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
+        {/* Telegram Mini App SDK */}
+        <script async src="https://telegram.org/js/telegram-web-app.js" />
       </head>
       <body>
+        <TelegramInit />
         {children}
 
         {/* Google Analytics 4 */}
