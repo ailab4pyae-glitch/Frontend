@@ -266,14 +266,11 @@ export default function WatchPage() {
       const mobiles    = streams?.hesgoal?.filter(s => s.label?.startsWith('Mobile')) || []
       const pcStreams   = streams?.hesgoal?.filter(s => s.label?.startsWith('PC')) || []
       if (isMainLive) {
-        // main-live: China HD is default, fall back to SD → hesgoal → SOCO
+        // main-live: China HD first, then SD, then any hesgoal m3u8 (no PC/SOCO)
+        const m3u8Streams = streams?.hesgoal?.filter(s => !s.label?.startsWith('PC')) || []
         if (streams?.HD?.length)          setMainMode('china-hd')
         else if (streams?.SD?.length)     setMainMode('china-sd')
-        else if (eng720)                  setMainMode('eng-720')
-        else if (eng1080)                 setMainMode('eng-1080')
-        else if (mobiles.length)          setMainMode('mobile-0')
-        else if (pcStreams.length)        setMainMode('pc-0')
-        else if (match?.stream_page_url)  setMainMode('soco')
+        else if (m3u8Streams.length)      setMainMode('hesgoal-0')
       } else {
         // hesgoal-live: English first, then Mobile, then China, then PC, then SOCO
         if (eng720)                       setMainMode('eng-720')
@@ -289,21 +286,25 @@ export default function WatchPage() {
 
   useEffect(() => {
     if (!isHesgoal) return
-    const eng1080  = streams?.hesgoal?.find(s => s.label === 'English 1080')
-    const eng720   = streams?.hesgoal?.find(s => s.label === 'English 720')
-    const mobiles  = streams?.hesgoal?.filter(s => s.label?.startsWith('Mobile')) || []
-    const pcStreams = streams?.hesgoal?.filter(s => s.label?.startsWith('PC')) || []
-    if (mainMode === 'eng-1080')             setActiveUrl(eng1080?.url || null)
-    else if (mainMode === 'eng-720')         setActiveUrl(eng720?.url || null)
+    const eng1080      = streams?.hesgoal?.find(s => s.label === 'English 1080')
+    const eng720       = streams?.hesgoal?.find(s => s.label === 'English 720')
+    const mobiles      = streams?.hesgoal?.filter(s => s.label?.startsWith('Mobile')) || []
+    const pcStreams     = streams?.hesgoal?.filter(s => s.label?.startsWith('PC')) || []
+    const m3u8Streams  = streams?.hesgoal?.filter(s => !s.label?.startsWith('PC')) || []
+    if (mainMode?.startsWith('hesgoal-')) {
+      const idx = parseInt(mainMode.split('-')[1]) || 0
+      setActiveUrl(m3u8Streams[idx]?.url || null)
+    } else if (mainMode === 'eng-1080')          setActiveUrl(eng1080?.url || null)
+    else if (mainMode === 'eng-720')             setActiveUrl(eng720?.url || null)
     else if (mainMode?.startsWith('mobile-')) {
       const idx = parseInt(mainMode.split('-')[1]) || 0
       setActiveUrl(mobiles[idx]?.url || null)
-    } else if (mainMode === 'china-hd')     setActiveUrl(streams?.HD?.[0]?.url || null)
-    else if (mainMode === 'china-sd')       setActiveUrl(streams?.SD?.[0]?.url || null)
+    } else if (mainMode === 'china-hd')          setActiveUrl(streams?.HD?.[0]?.url || null)
+    else if (mainMode === 'china-sd')            setActiveUrl(streams?.SD?.[0]?.url || null)
     else if (mainMode?.startsWith('pc-')) {
       const idx = parseInt(mainMode.split('-')[1]) || 0
       setActiveUrl(pcStreams[idx]?.url || null)
-    } else                                  setActiveUrl(null) // soco iframe — no video URL
+    } else                                       setActiveUrl(null) // soco iframe — no video URL
   }, [isHesgoal, mainMode, streams])
 
   // When streams load or refresh: if CDN token changed (same base path, different full URL)
@@ -580,7 +581,8 @@ export default function WatchPage() {
         )}
 
         {/* Stream selector — only shown for live matches */}
-        {match?.status === 'live' && isHesgoal ? (
+        {match?.status === 'live' && isMainLive ? (
+          /* main-live: China HD + China SD + hesgoal m3u8 only (no PC, no SOCO) */
           <div style={{
             margin: '12px 16px 0',
             padding: '14px',
@@ -589,61 +591,7 @@ export default function WatchPage() {
             border: '1px solid #e5e7eb',
             display: 'flex', gap: 10, flexWrap: 'wrap',
           }}>
-            {/* English HD 1080p — HESGoal fixed Rumble 1080p */}
-            {streams?.hesgoal?.find(s => s.label === 'English 1080') && (() => {
-              const active = mainMode === 'eng-1080'
-              return (
-                <button onClick={() => { killActiveStream(); setMainMode('eng-1080') }} style={{
-                  flex: 1, padding: '12px 8px', borderRadius: 12, cursor: 'pointer',
-                  border: `1.5px solid ${active ? '#00e5ff' : 'rgba(0,229,255,0.3)'}`,
-                  background: active ? 'rgba(0,229,255,0.18)' : 'rgba(0,229,255,0.07)',
-                  boxShadow: active ? '0 0 18px rgba(0,229,255,0.3)' : 'none',
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                  transition: 'all .15s',
-                }}>
-                  <span style={{ fontSize: 18 }}>🏴󠁧󠁢󠁥󠁮󠁧󠁿</span>
-                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#00e5ff' : '#374151' }}>English HD</span>
-                  <span style={{ fontSize: 10, color: active ? 'rgba(0,229,255,0.7)' : '#9ca3af' }}>1080p</span>
-                </button>
-              )
-            })()}
-            {/* English HD 720p — HESGoal fixed Rumble 720p (DEFAULT) */}
-            {streams?.hesgoal?.find(s => s.label === 'English 720') && (() => {
-              const active = mainMode === 'eng-720'
-              return (
-                <button onClick={() => { killActiveStream(); setMainMode('eng-720') }} style={{
-                  flex: 1, padding: '12px 8px', borderRadius: 12, cursor: 'pointer',
-                  border: `1.5px solid ${active ? '#00e5ff' : 'rgba(0,229,255,0.3)'}`,
-                  background: active ? 'rgba(0,229,255,0.18)' : 'rgba(0,229,255,0.07)',
-                  boxShadow: active ? '0 0 18px rgba(0,229,255,0.3)' : 'none',
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                  transition: 'all .15s',
-                }}>
-                  <span style={{ fontSize: 18 }}>🏴󠁧󠁢󠁥󠁮󠁧󠁿</span>
-                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#00e5ff' : '#374151' }}>English HD</span>
-                  <span style={{ fontSize: 10, color: '#9ca3af' }}>720p</span>
-                </button>
-              )
-            })()}
-            {/* Mobile (hesgoal) m3u8 streams — Line N */}
-            {(streams?.hesgoal?.filter(s => s.label?.startsWith('Mobile')) || []).map((s, i) => {
-              const active = mainMode === `mobile-${i}`
-              return (
-                <button key={s.id} onClick={() => { killActiveStream(); setMainMode(`mobile-${i}`) }} style={{
-                  flex: 1, padding: '12px 8px', borderRadius: 12, cursor: 'pointer',
-                  border: `1.5px solid ${active ? '#22c55e' : 'rgba(34,197,94,0.3)'}`,
-                  background: active ? 'rgba(34,197,94,0.18)' : 'rgba(34,197,94,0.07)',
-                  boxShadow: active ? '0 0 18px rgba(34,197,94,0.3)' : 'none',
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                  transition: 'all .15s',
-                }}>
-                  <span style={{ fontSize: 18 }}>📡</span>
-                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#22c55e' : '#374151' }}>Line {i + 1}</span>
-                  <span style={{ fontSize: 10, color: '#9ca3af' }}>HD</span>
-                </button>
-              )
-            })}
-            {/* China HD 720p */}
+            {/* China HD */}
             {streams?.HD?.length > 0 && (() => {
               const active = mainMode === 'china-hd'
               return (
@@ -661,7 +609,7 @@ export default function WatchPage() {
                 </button>
               )
             })()}
-            {/* China SD 480p */}
+            {/* China SD */}
             {streams?.SD?.length > 0 && (() => {
               const active = mainMode === 'china-sd'
               return (
@@ -679,7 +627,120 @@ export default function WatchPage() {
                 </button>
               )
             })()}
-            {/* SOCO — fallback */}
+            {/* Hesgoal m3u8 streams with their labels (no PC iframes) */}
+            {(streams?.hesgoal?.filter(s => !s.label?.startsWith('PC')) || []).map((s, i) => {
+              const active = mainMode === `hesgoal-${i}`
+              return (
+                <button key={s.id} onClick={() => { killActiveStream(); setMainMode(`hesgoal-${i}`) }} style={{
+                  flex: 1, padding: '12px 8px', borderRadius: 12, cursor: 'pointer',
+                  border: `1.5px solid ${active ? '#22c55e' : 'rgba(34,197,94,0.3)'}`,
+                  background: active ? 'rgba(34,197,94,0.18)' : 'rgba(34,197,94,0.07)',
+                  boxShadow: active ? '0 0 18px rgba(34,197,94,0.3)' : 'none',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                  transition: 'all .15s',
+                }}>
+                  <span style={{ fontSize: 18 }}>📡</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#22c55e' : '#374151' }}>{s.label}</span>
+                  <span style={{ fontSize: 10, color: '#9ca3af' }}>m3u8</span>
+                </button>
+              )
+            })}
+          </div>
+        ) : match?.status === 'live' && isHesgoal ? (
+          /* hesgoal-live tab: full button set including English, Mobile, China, PC, SOCO */
+          <div style={{
+            margin: '12px 16px 0',
+            padding: '14px',
+            background: '#f3f4f6',
+            borderRadius: 14,
+            border: '1px solid #e5e7eb',
+            display: 'flex', gap: 10, flexWrap: 'wrap',
+          }}>
+            {streams?.hesgoal?.find(s => s.label === 'English 1080') && (() => {
+              const active = mainMode === 'eng-1080'
+              return (
+                <button onClick={() => { killActiveStream(); setMainMode('eng-1080') }} style={{
+                  flex: 1, padding: '12px 8px', borderRadius: 12, cursor: 'pointer',
+                  border: `1.5px solid ${active ? '#00e5ff' : 'rgba(0,229,255,0.3)'}`,
+                  background: active ? 'rgba(0,229,255,0.18)' : 'rgba(0,229,255,0.07)',
+                  boxShadow: active ? '0 0 18px rgba(0,229,255,0.3)' : 'none',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                  transition: 'all .15s',
+                }}>
+                  <span style={{ fontSize: 18 }}>🏴󠁧󠁢󠁥󠁮󠁧󠁿</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#00e5ff' : '#374151' }}>English HD</span>
+                  <span style={{ fontSize: 10, color: active ? 'rgba(0,229,255,0.7)' : '#9ca3af' }}>1080p</span>
+                </button>
+              )
+            })()}
+            {streams?.hesgoal?.find(s => s.label === 'English 720') && (() => {
+              const active = mainMode === 'eng-720'
+              return (
+                <button onClick={() => { killActiveStream(); setMainMode('eng-720') }} style={{
+                  flex: 1, padding: '12px 8px', borderRadius: 12, cursor: 'pointer',
+                  border: `1.5px solid ${active ? '#00e5ff' : 'rgba(0,229,255,0.3)'}`,
+                  background: active ? 'rgba(0,229,255,0.18)' : 'rgba(0,229,255,0.07)',
+                  boxShadow: active ? '0 0 18px rgba(0,229,255,0.3)' : 'none',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                  transition: 'all .15s',
+                }}>
+                  <span style={{ fontSize: 18 }}>🏴󠁧󠁢󠁥󠁮󠁧󠁿</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#00e5ff' : '#374151' }}>English HD</span>
+                  <span style={{ fontSize: 10, color: '#9ca3af' }}>720p</span>
+                </button>
+              )
+            })()}
+            {(streams?.hesgoal?.filter(s => s.label?.startsWith('Mobile')) || []).map((s, i) => {
+              const active = mainMode === `mobile-${i}`
+              return (
+                <button key={s.id} onClick={() => { killActiveStream(); setMainMode(`mobile-${i}`) }} style={{
+                  flex: 1, padding: '12px 8px', borderRadius: 12, cursor: 'pointer',
+                  border: `1.5px solid ${active ? '#22c55e' : 'rgba(34,197,94,0.3)'}`,
+                  background: active ? 'rgba(34,197,94,0.18)' : 'rgba(34,197,94,0.07)',
+                  boxShadow: active ? '0 0 18px rgba(34,197,94,0.3)' : 'none',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                  transition: 'all .15s',
+                }}>
+                  <span style={{ fontSize: 18 }}>📡</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#22c55e' : '#374151' }}>Line {i + 1}</span>
+                  <span style={{ fontSize: 10, color: '#9ca3af' }}>HD</span>
+                </button>
+              )
+            })}
+            {streams?.HD?.length > 0 && (() => {
+              const active = mainMode === 'china-hd'
+              return (
+                <button onClick={() => { killActiveStream(); setMainMode('china-hd') }} style={{
+                  flex: 1, padding: '12px 8px', borderRadius: 12, cursor: 'pointer',
+                  border: `1.5px solid ${active ? '#e879f9' : 'rgba(232,121,249,0.3)'}`,
+                  background: active ? 'rgba(232,121,249,0.18)' : 'rgba(232,121,249,0.07)',
+                  boxShadow: active ? '0 0 18px rgba(232,121,249,0.3)' : 'none',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                  transition: 'all .15s',
+                }}>
+                  <span style={{ fontSize: 18 }}>🎬</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#e879f9' : '#374151' }}>China HD</span>
+                  <span style={{ fontSize: 10, color: '#9ca3af' }}>720p</span>
+                </button>
+              )
+            })()}
+            {streams?.SD?.length > 0 && (() => {
+              const active = mainMode === 'china-sd'
+              return (
+                <button onClick={() => { killActiveStream(); setMainMode('china-sd') }} style={{
+                  flex: 1, padding: '12px 8px', borderRadius: 12, cursor: 'pointer',
+                  border: `1.5px solid ${active ? '#a78bfa' : 'rgba(167,139,250,0.3)'}`,
+                  background: active ? 'rgba(167,139,250,0.18)' : 'rgba(167,139,250,0.07)',
+                  boxShadow: active ? '0 0 18px rgba(167,139,250,0.3)' : 'none',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                  transition: 'all .15s',
+                }}>
+                  <span style={{ fontSize: 18 }}>📺</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#a78bfa' : '#374151' }}>China SD</span>
+                  <span style={{ fontSize: 10, color: '#9ca3af' }}>480p</span>
+                </button>
+              )
+            })()}
             {match?.stream_page_url && (() => {
               const active = mainMode === 'soco'
               return (
@@ -697,7 +758,6 @@ export default function WatchPage() {
                 </button>
               )
             })()}
-            {/* PC (iframe) streams */}
             {(streams?.hesgoal?.filter(s => s.label?.startsWith('PC')) || []).map((s, i) => {
               const active = mainMode === `pc-${i}`
               return (
