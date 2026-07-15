@@ -811,6 +811,25 @@ export default function WatchPage() {
                   })}
                 </div>
               </>
+            ) : isChinaLive ? (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {[...(streams?.HD || []), ...(streams?.SD || [])].map((s, i) => {
+                  const active = activeUrl === s.url
+                  return (
+                    <button key={s.id} onClick={() => { killActiveStream(); setActiveUrl(s.url) }} style={{
+                      flex: 1, minWidth: 70, padding: '12px 8px', borderRadius: 12, cursor: 'pointer',
+                      border: `1.5px solid ${active ? '#e879f9' : 'rgba(232,121,249,0.3)'}`,
+                      background: active ? 'rgba(232,121,249,0.18)' : 'rgba(232,121,249,0.07)',
+                      boxShadow: active ? '0 0 18px rgba(232,121,249,0.3)' : 'none',
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                      transition: 'all .15s',
+                    }}>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: active ? '#e879f9' : '#374151' }}>Line {i + 1}</span>
+                      <span style={{ fontSize: 10, color: '#9ca3af' }}>{s.quality || (i < (streams?.HD?.length || 0) ? 'HD' : 'SD')}</span>
+                    </button>
+                  )
+                })}
+              </div>
             ) : (
               <ServerSelector
                 streams={streams || { SD: [], HD: [] }}
